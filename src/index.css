@@ -1,0 +1,87 @@
+/* src/index.css - Contenido completo */
+@import "tailwindcss";
+
+/* Reset básico para ocupar toda la pantalla */
+* {
+
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  min-height: 100vh;
+}
+
+/* Estilos adicionales para mejorar la UI */
+.sidebar-shadow {
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.header-shadow {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Animaciones para promociones agrupadas */
+@keyframes promocion-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.promocion-agrupada {
+  animation: promocion-pulse 3s infinite;
+}
+
+.promocion-agrupada:hover {
+  animation: none;
+  transform: scale(1.05);
+}
+
+/* Efecto de brillo para las tarjetas de promoción */
+.promocion-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.promocion-shine::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transform: rotate(45deg);
+  transition: all 0.6s;
+  pointer-events: none;
+}
+
+.promocion-shine:hover::before {
+  left: 100%;
+}
+
+/* Mejoras para textos con gradiente */
+.texto-promocion {
+  background: linear-gradient(135deg, #ffffff, #fef3c7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
