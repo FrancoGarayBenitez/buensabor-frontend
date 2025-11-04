@@ -2,10 +2,7 @@ import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import type { Rol } from "../../types/common";
-import {
-  type UsuarioBaseResponseDTO,
-  isCliente,
-} from "../../types/usuario/UserTypes";
+import { isCliente, isEmpleado } from "../../types/usuario/UserTypes";
 
 // Importar todos los navbars
 import NavbarInvitado from "./navbar/NavbarInvitado";
@@ -14,6 +11,7 @@ import NavbarCajero from "./navbar/NavbarCajero";
 import NavbarDelivery from "./navbar/NavbarDelivery";
 import NavbarCocinero from "./navbar/NavbarCocinero";
 import NavbarAdmin from "./navbar/NavbarAdmin";
+import type { EmpleadoResponseDTO } from "../../types/empleados/EmpleadoDTO";
 
 const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -21,8 +19,8 @@ const Header: React.FC = () => {
   const { isAuthenticated, isLoading, user, role, logout } = useAuth();
 
   // Rutas donde NO debe aparecer ninguna navbar
-  const noNavbarRoutes = ["/login", "/registro"];
-  const shouldShowNavbar = !noNavbarRoutes.includes(location.pathname);
+  const authRoutes = ["/login", "/registro"];
+  const isAuthRoute = authRoutes.includes(location.pathname);
 
   // Redirecciones
   const handleLoginRedirect = () => navigate("/login");
@@ -44,6 +42,29 @@ const Header: React.FC = () => {
     }
   };
 
+  // HEADER MÍNIMO PARA RUTAS DE AUTENTICACIÓN
+  if (isAuthRoute) {
+    return (
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-center items-center h-16">
+            <button
+              onClick={handleHome}
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity duration-200 cursor-pointer"
+              aria-label="Ir al inicio"
+            >
+              <img
+                src="/src/assets/logos/Logo-nabvar.png"
+                alt="El Buen Sabor"
+                className="h-12 w-auto"
+              />
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   // Renderizar navbar según autenticación y rol
   const renderNavbar = () => {
     // Si no está autenticado
@@ -60,6 +81,7 @@ const Header: React.FC = () => {
     // Usuario autenticado
     const userRole = getUserRole();
 
+    // CLIENTE
     if (isCliente(user)) {
       return (
         <NavbarCliente
@@ -70,57 +92,58 @@ const Header: React.FC = () => {
       );
     }
 
-    // Si no es cliente, es necesariamente un Empleado/Admin (UsuarioBaseResponseDTO)
-    const employeeData = user as UsuarioBaseResponseDTO;
+    // EMPLEADO
+    if (isEmpleado(user)) {
+      const empleadoData: EmpleadoResponseDTO = user;
 
-    switch (userRole) {
-      case "ADMIN":
-        return (
-          <NavbarAdmin
-            user={employeeData}
-            onLogout={handleLogout}
-            onHome={handleHome}
-          />
-        );
-      case "CAJERO":
-        return (
-          <NavbarCajero
-            user={employeeData}
-            onLogout={handleLogout}
-            onHome={handleHome}
-          />
-        );
-      case "DELIVERY":
-        return (
-          <NavbarDelivery
-            user={employeeData}
-            onLogout={handleLogout}
-            onHome={handleHome}
-          />
-        );
-      case "COCINERO":
-        return (
-          <NavbarCocinero
-            user={employeeData}
-            onLogout={handleLogout}
-            onHome={handleHome}
-          />
-        );
-      default:
-        // Fallback por si el rol es reconocido pero no tipado (o es null, aunque ya lo chequeamos)
-        return (
-          <NavbarInvitado
-            onLogin={handleLoginRedirect}
-            onRegister={handleRegisterRedirect}
-            onHome={handleHome}
-          />
-        );
+      switch (userRole) {
+        case "ADMIN":
+          return (
+            <NavbarAdmin
+              user={empleadoData}
+              onLogout={handleLogout}
+              onHome={handleHome}
+            />
+          );
+        case "CAJERO":
+          return (
+            <NavbarCajero
+              user={empleadoData}
+              onLogout={handleLogout}
+              onHome={handleHome}
+            />
+          );
+        case "DELIVERY":
+          return (
+            <NavbarDelivery
+              user={empleadoData}
+              onLogout={handleLogout}
+              onHome={handleHome}
+            />
+          );
+        case "COCINERO":
+          return (
+            <NavbarCocinero
+              user={empleadoData}
+              onLogout={handleLogout}
+              onHome={handleHome}
+            />
+          );
+        default:
+          console.warn(`Rol de empleado no reconocido: ${userRole}`);
+          break;
+      }
     }
-  };
 
-  if (!shouldShowNavbar) {
-    return null;
-  }
+    // Fallback si no es ni cliente ni empleado reconocido
+    return (
+      <NavbarInvitado
+        onLogin={handleLoginRedirect}
+        onRegister={handleRegisterRedirect}
+        onHome={handleHome}
+      />
+    );
+  };
 
   if (isLoading) {
     return (

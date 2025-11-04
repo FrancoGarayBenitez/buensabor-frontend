@@ -182,7 +182,7 @@ const Usuarios: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm">
           <UsuarioGestionTable
             usuarios={usuariosFiltrados} // ← Usar usuarios filtrados
-            currentUserId={currentUserId}
+            currentUserId={currentUserId ?? undefined}
             onRoleChange={updateUserRole}
             onUserToggle={toggleUserStatus}
             loading={loading}

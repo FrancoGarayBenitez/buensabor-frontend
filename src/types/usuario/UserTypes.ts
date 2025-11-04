@@ -1,19 +1,9 @@
 import type { ClienteResponseDTO } from "../clientes/ClienteResponseDTO";
-import type { ImagenDTO, Rol } from "../common";
-
-// DTO base para empleados (equivalente a UsuarioBaseResponseDTO del backend)
-export interface UsuarioBaseResponseDTO {
-  idUsuario: number;
-  email: string;
-  rol: Rol;
-  nombre: string;
-  apellido: string;
-  activo: boolean;
-  imagen?: ImagenDTO;
-}
+import type { Rol } from "../common";
+import type { EmpleadoResponseDTO } from "../empleados/EmpleadoDTO";
 
 // Tipo unión que representa cualquier usuario autenticado
-export type AuthenticatedUser = ClienteResponseDTO | UsuarioBaseResponseDTO;
+export type AuthenticatedUser = ClienteResponseDTO | EmpleadoResponseDTO;
 
 // ==================== TYPE GUARDS ====================
 
@@ -36,6 +26,13 @@ export const isCliente = (
  */
 export const isEmpleado = (
   user: AuthenticatedUser
-): user is UsuarioBaseResponseDTO => {
+): user is EmpleadoResponseDTO => {
   return "activo" in user && !("idCliente" in user);
+};
+
+/**
+ * Type guard específico para roles de empleado
+ */
+export const isRolEmpleado = (rol: Rol): boolean => {
+  return ["ADMIN", "COCINERO", "CAJERO", "DELIVERY"].includes(rol);
 };

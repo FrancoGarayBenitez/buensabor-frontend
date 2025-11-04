@@ -29,6 +29,7 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
       numero: 0,
       cp: 0,
       localidad: "",
+      esPrincipal: true,
     },
   });
 

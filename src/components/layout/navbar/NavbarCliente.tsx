@@ -121,13 +121,6 @@ export default function NavbarCliente({
 
                       <div className="border-t border-gray-200 my-1"></div>
 
-                      <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 mx-2 rounded">
-                        💡 Los cambios de permisos se aplicarán en tu próximo
-                        inicio de sesión
-                      </div>
-
-                      <div className="border-t border-gray-200 my-1"></div>
-
                       <button
                         onClick={handleLogout}
                         className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200"

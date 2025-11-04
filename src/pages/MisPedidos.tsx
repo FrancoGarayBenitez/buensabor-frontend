@@ -22,7 +22,7 @@ import type { PedidoResponseDTO } from "../types/pedidos/PedidoResponseDTO";
 // 🆕 NUEVO: Importaciones para facturas
 import { BotonDescargarFacturaPdf } from "../components/facturas/BotonDescargarFactura";
 import { useFacturas } from "../hooks/useFacturas";
-import UsuarioService from "../services/UsuarioService";
+import PerfilService from "../services/PerfilService";
 
 const pedidoService = new PedidoService();
 
@@ -476,7 +476,7 @@ const MisPedidos: React.FC = () => {
           "⚠️ Obteniendo idCliente del backend para cargar pedidos..."
         );
         try {
-          const perfilCompleto = await UsuarioService.getMyProfile();
+          const perfilCompleto = await PerfilService.getMyProfile();
 
           if (isCliente(perfilCompleto)) {
             clienteId = perfilCompleto.idCliente;

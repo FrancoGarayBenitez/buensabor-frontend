@@ -41,7 +41,11 @@ import {
   Users,
   BadgePercent,
   BookCopy,
+  UserPlus,
 } from "lucide-react";
+import Login from "./pages/Login";
+import Registro from "./pages/Registro";
+import GestionEmpleados from "./pages/GestionEmpleados";
 
 // Componente que permite acceso público al Home y redirige usuarios autenticados si es necesario
 const ProtectedHomeRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -207,6 +211,10 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
             <Users className="w-5 h-5" />
             Usuarios
           </NavLink>
+          <NavLink to="/admin/empleados" className="flex items-center gap-3">
+            <UserPlus className="w-5 h-5" />
+            Nuevo Empleado
+          </NavLink>
           <NavLink to="/promociones" className="flex items-center gap-3">
             <BadgePercent className="w-5 h-5" />
             Promociones
@@ -255,6 +263,24 @@ function App() {
     <CarritoUnificadoProvider>
       <WebSocketProvider>
         <Routes>
+          {/* Rutas de autenticación */}
+          <Route
+            path="/login"
+            element={
+              <PublicLayout>
+                <Login />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/registro"
+            element={
+              <PublicLayout>
+                <Registro />
+              </PublicLayout>
+            }
+          />
+
           {/* ✅ RUTAS PROTEGIDAS: Home con redirección automática */}
           <Route
             path="/"
@@ -365,6 +391,16 @@ function App() {
           />
 
           {/* Rutas administrativas */}
+          <Route
+            path="/admin/empleados"
+            element={
+              <ProtectedRoute allowedRoles={["ADMIN"]}>
+                <AdminLayout>
+                  <GestionEmpleados />
+                </AdminLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/dashboard"
             element={

@@ -2,7 +2,8 @@ import { type LoginRequestDTO, type LoginResponseDTO } from "../types/auth";
 import { type ClienteRegisterDTO } from "../types/clientes/ClienteRegisterDTO";
 import { apiClienteService } from "./ApiClienteService";
 
-const BASE_URL = "/api/auth";
+const BASE_URL = "/auth";
+const TOKEN_KEY = "jwt_token";
 
 /**
  * Servicio para manejar el login y registro de usuarios
@@ -29,8 +30,17 @@ const AuthPasswordService = {
     );
 
     // 🔑 ALMACENAR EL TOKEN: Este paso es CRÍTICO.
-    localStorage.setItem("jwt_token", response.token);
-    localStorage.setItem("user_email", response.email); // Opcional, pero útil
+    if (response.token) {
+      localStorage.setItem(TOKEN_KEY, response.token);
+      localStorage.setItem("user_email", response.email);
+      console.log(
+        "💾 Token almacenado:",
+        response.token.substring(0, 20) + "..."
+      );
+    } else {
+      console.error("❌ No se recibió token en la respuesta de login");
+      throw new Error("No se recibió token de autenticación");
+    }
 
     return response;
   },
@@ -39,16 +49,29 @@ const AuthPasswordService = {
    * Limpia la sesión local (logout).
    */
   logout: () => {
-    localStorage.removeItem("jwt_token");
+    localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem("user_email");
-    // Asegúrate de limpiar cualquier estado de Auth0 si existía
   },
 
   /**
    * Obtiene el token JWT almacenado.
    */
   getToken: (): string | null => {
-    return localStorage.getItem("jwt_token");
+    const token = localStorage.getItem(TOKEN_KEY);
+    return token;
+  },
+
+  /**
+   * Establece el token JWT en el localStorage.
+   */
+  setToken: (token: string): void => {
+    if (!token) {
+      console.error("❌ Intento de guardar token vacío");
+      return;
+    }
+
+    localStorage.setItem(TOKEN_KEY, token);
+    console.log("💾 Token establecido:", token.substring(0, 20) + "...");
   },
 
   /**

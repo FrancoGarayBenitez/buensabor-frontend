@@ -12,25 +12,32 @@ export class ApiClienteService {
   }
 
   /**
-   * ✅ ADAPTADO: Ahora obtiene el JWT directamente de la sesión local
-   * usando AuthPasswordService.
+   * Obtiene headers con token siempre actualizado
    */
   private async getAuthHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    // 🔑 OBTENER EL TOKEN LOCALMENTE
-    const token = AuthPasswordService.getToken(); // Llama a la función que lee 'jwt_token' del localStorage
+    // SIEMPRE obtener token fresco desde localStorage (no usar cache)
+    const token = AuthPasswordService.getToken();
 
     if (token) {
       headers.Authorization = `Bearer ${token}`;
+      console.log(
+        "🔐 Token agregado a headers:",
+        token.substring(0, 20) + "..."
+      );
+    } else {
+      console.log("⚠️ No hay token disponible para la petición");
     }
-    // Si no hay token, simplemente retornamos los headers sin Authorization (para endpoints públicos)
+
     return headers;
   }
 
   private async request<T>(url: string, options?: RequestInit): Promise<T> {
+    console.log(`📡 ${options?.method || "GET"} ${this.baseUrl}${url}`);
+
     const authHeaders = await this.getAuthHeaders();
 
     const response = await fetch(`${this.baseUrl}${url}`, {
@@ -41,8 +48,11 @@ export class ApiClienteService {
       ...options,
     });
 
+    console.log(`📨 Respuesta: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       if (response.status === 401) {
+        console.log("🚫 Error 401 - Token inválido o expirado");
       }
 
       const errorBody = await response.text();
@@ -59,6 +69,7 @@ export class ApiClienteService {
         errorMessage = errorBody || errorMessage;
       }
 
+      console.error(`❌ Error completo:`, errorMessage);
       throw new Error(errorMessage);
     }
 

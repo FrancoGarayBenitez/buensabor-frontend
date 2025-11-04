@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { User, LogOut, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import type { UsuarioBaseResponseDTO } from "../../../types/usuario/UserTypes";
+import type { EmpleadoResponseDTO } from "../../../types/empleados/EmpleadoDTO";
 
 interface NavbarCajeroProps {
-  user?: UsuarioBaseResponseDTO;
+  user?: EmpleadoResponseDTO;
   onLogout?: () => void;
   onHome?: () => void;
 }

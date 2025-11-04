@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { User, LogOut, ChefHat, Clock, RefreshCw, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import type { UsuarioBaseResponseDTO } from "../../../types/usuario/UserTypes";
+import type { EmpleadoResponseDTO } from "../../../types/empleados/EmpleadoDTO";
 
 interface NavbarCocineroProps {
-  user?: UsuarioBaseResponseDTO;
+  user?: EmpleadoResponseDTO;
   onLogout?: () => void;
   onHome?: () => void;
   totalPedidos?: number;

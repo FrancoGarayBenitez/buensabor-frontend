@@ -7,12 +7,13 @@ import {
   Package,
   ShoppingBag,
   ChefHat,
+  UserPlus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import type { UsuarioBaseResponseDTO } from "../../../types/usuario/UserTypes";
+import type { EmpleadoResponseDTO } from "../../../types/empleados/EmpleadoDTO";
 
 interface NavbarAdminProps {
-  user?: UsuarioBaseResponseDTO;
+  user?: EmpleadoResponseDTO;
   onLogout?: () => void;
   onHome?: () => void;
 }
@@ -158,6 +159,15 @@ export default function NavbarAdmin({
 
           {/* Derecha: Acciones rápidas */}
           <div className="flex items-center space-x-2">
+            <button
+              onClick={() => navigate("/admin/empleados")}
+              className="flex items-center space-x-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors duration-200 cursor-pointer"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span className="hidden lg:block text-sm font-medium">
+                Nuevo Empleado
+              </span>
+            </button>
             <button
               onClick={() => navigate("/gestion-pedidos")}
               className="flex items-center space-x-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors duration-200 cursor-pointer"

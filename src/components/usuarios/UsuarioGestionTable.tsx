@@ -103,7 +103,6 @@ export const UsuarioGestionTable: React.FC<UsuarioGestionTableProps> = ({
     <div className="overflow-x-auto shadow-lg rounded-lg">
       <table className="min-w-full bg-white">
         <thead style={{ backgroundColor: "#CD6C50" }} className="text-white">
-          {" "}
           {/* ← Color exacto del botón */}
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
@@ -126,6 +125,9 @@ export const UsuarioGestionTable: React.FC<UsuarioGestionTableProps> = ({
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
               Acciones
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+              Tipo
             </th>
           </tr>
         </thead>
@@ -224,6 +226,17 @@ export const UsuarioGestionTable: React.FC<UsuarioGestionTableProps> = ({
                     "Activar"
                   )}
                 </button>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span
+                  className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    usuario.rol === "CLIENTE"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-purple-100 text-purple-800"
+                  }`}
+                >
+                  {usuario.rol === "CLIENTE" ? "Cliente" : "Empleado"}
+                </span>
               </td>
             </tr>
           ))}

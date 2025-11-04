@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import UsuarioService from "../services/UsuarioService";
+import PerfilService from "../services/PerfilService";
 import { useAuth } from "./useAuth";
 import type {
   ClientePerfilDTO,
@@ -40,7 +40,7 @@ export const useClientePerfil = () => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const user = await UsuarioService.getMyProfile();
+      const user = await PerfilService.getMyProfile();
       // Verificar que sea un cliente antes de asignar
       if (isCliente(user)) {
         setState((prev) => ({ ...prev, perfil: user, isLoading: false }));
@@ -68,7 +68,7 @@ export const useClientePerfil = () => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const perfilInfo = await UsuarioService.getMyProfileInfo();
+      const perfilInfo = await PerfilService.getMyProfileInfo();
       setState((prev) => ({ ...prev, perfilInfo, isLoading: false }));
       return perfilInfo;
     } catch (error: any) {
@@ -93,7 +93,7 @@ export const useClientePerfil = () => {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
-        const perfilActualizado = await UsuarioService.updateMyProfileInfo(
+        const perfilActualizado = await PerfilService.updateMyProfileInfo(
           perfilData
         );
 
@@ -135,7 +135,7 @@ export const useClientePerfil = () => {
     if (!isAuthenticated) return;
 
     try {
-      const estadisticas = await UsuarioService.getMyProfileStats();
+      const estadisticas = await PerfilService.getMyProfileStats();
       setState((prev) => ({ ...prev, estadisticas }));
       return estadisticas;
     } catch (error: any) {

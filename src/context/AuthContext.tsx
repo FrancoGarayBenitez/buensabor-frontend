@@ -4,6 +4,7 @@ import type { Rol } from "../types/common/Rol";
 import type { AuthenticatedUser } from "../types/usuario/UserTypes";
 // Importamos el hook de lógica que contiene todo el estado y los métodos
 import { useAuthLogic } from "../hooks/useAuthLogic";
+import type { ClienteRegisterDTO } from "../types/clientes";
 
 // ===================================
 // 1. INTERFAZ DE CONTEXTO
@@ -14,6 +15,7 @@ interface AuthContextType {
   user: AuthenticatedUser | null;
   role: Rol | null;
   login: (credentials: LoginRequestDTO) => Promise<void>;
+  register: (data: ClienteRegisterDTO) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
   refreshProfile: () => void;

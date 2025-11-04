@@ -30,7 +30,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { PedidoService } from "../../services/PedidoServices";
 import { MercadoPagoService } from "../../services/MercadoPagoService";
 import ClienteService from "../../services/ClienteService";
-import UsuarioService from "../../services/UsuarioService";
+import PerfilService from "../../services/PerfilService";
 import { PagoService } from "../../services/PagoService";
 
 import type { ClienteResponseDTO } from "../../types/clientes/ClienteResponseDTO";
@@ -115,7 +115,7 @@ const CheckoutModalMercadoPago: React.FC<CheckoutModalMercadoPagoProps> = ({
       // Fallback: Si no hay idCliente, obtenerlo del backend
       if (!clienteId) {
         console.log("⚠️ idCliente no disponible, obteniendo del backend...");
-        const perfilCompleto = await UsuarioService.getMyProfile();
+        const perfilCompleto = await PerfilService.getMyProfile();
 
         if (isCliente(perfilCompleto)) {
           clienteId = perfilCompleto.idCliente;
@@ -250,7 +250,7 @@ const CheckoutModalMercadoPago: React.FC<CheckoutModalMercadoPagoProps> = ({
     // Fallback: Si no hay idCliente, obtenerlo del backend
     if (!clienteId) {
       console.log("⚠️ Obteniendo idCliente del backend...");
-      const perfilCompleto = await UsuarioService.getMyProfile();
+      const perfilCompleto = await PerfilService.getMyProfile();
 
       if (isCliente(perfilCompleto)) {
         clienteId = perfilCompleto.idCliente;
@@ -359,7 +359,7 @@ const CheckoutModalMercadoPago: React.FC<CheckoutModalMercadoPagoProps> = ({
     if (!clienteId) {
       console.log("⚠️ Obteniendo idCliente del backend...");
       try {
-        const perfilCompleto = await UsuarioService.getMyProfile();
+        const perfilCompleto = await PerfilService.getMyProfile();
 
         if (isCliente(perfilCompleto)) {
           clienteId = perfilCompleto.idCliente;
