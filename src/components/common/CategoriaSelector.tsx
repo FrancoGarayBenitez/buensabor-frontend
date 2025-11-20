@@ -91,6 +91,13 @@ export const CategoriaSelector: React.FC<CategoriaSelectorProps> = ({
     }
   }, [categoriaPrincipalSelected]);
 
+  // Notificar cambio cuando se selecciona subcategoría
+  useEffect(() => {
+    if (subcategoriaSelected > 0) {
+      onChange(subcategoriaSelected);
+    }
+  }, [subcategoriaSelected]);
+
   const handleCategoriaPrincipalChange = (value: string | number) => {
     const newValue = Number(value);
     setCategoriaPrincipalSelected(newValue);
@@ -142,17 +149,20 @@ export const CategoriaSelector: React.FC<CategoriaSelectorProps> = ({
         error={showError ? error : undefined}
       />
 
-      {/* Subcategorías - Solo mostrar si hay categoría principal seleccionada */}
+      {/* Subcategorías - Solo mostrar si hay categoría principal seleccionada y existen subcategorías */}
       {categoriaPrincipalSelected > 0 && subcategorias.length > 0 && (
         <Select
           label="Subcategoría"
           name="subcategoria"
           value={subcategoriaSelected}
           onChange={handleSubcategoriaChange}
-          options={subcategorias.map((sub) => ({
-            value: sub.idCategoria,
-            label: sub.denominacion,
-          }))}
+          options={[
+            { value: 0, label: "Sin subcategoría (usar principal)" },
+            ...subcategorias.map((sub) => ({
+              value: sub.idCategoria,
+              label: sub.denominacion,
+            })),
+          ]}
           placeholder="Seleccione subcategoría (opcional)"
           disabled={disabled}
           helperText="Opcional: Si no selecciona subcategoría, se usará la categoría principal"

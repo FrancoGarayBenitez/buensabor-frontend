@@ -1,206 +1,106 @@
-// src/hooks/useImageUpload.ts
-import { useState } from 'react';
-import { ImageService } from '../services/ImageService';
-
-interface ImageUploadResult {
-  success: boolean;
-  idImagen?: number;
-  filename?: string;
-  url?: string;
-  originalName?: string;
-  denominacion?: string;
-  size?: number;
-  contentType?: string;
-  error?: string;
-  message?: string;
-}
+import { useState } from "react";
+import ImageService, { type ImageUploadResult } from "../services/ImageService";
 
 interface UseImageUploadReturn {
-  // Métodos legacy (solo archivos)
-  uploadImage: (file: File) => Promise<ImageUploadResult>;
-  deleteImage: (filename: string) => Promise<boolean>;
-  validateImage: (filename: string) => Promise<boolean>;
-  
-  // Nuevos métodos integrados (archivo + BD)
-  uploadImageForArticulo: (file: File, idArticulo: number, denominacion?: string) => Promise<ImageUploadResult>;
-  updateImageForArticulo: (file: File, idArticulo: number, denominacion?: string) => Promise<ImageUploadResult>;
-  deleteImageCompletely: (idImagen: number) => Promise<boolean>;
-  getImagesByArticulo: (idArticulo: number) => Promise<any[]>;
-  
-  // Estados
-  isUploading: boolean;
-  uploadProgress: number;
+  uploading: boolean;
+  progress: number;
+  uploadImage: (
+    file: File,
+    entityType: string,
+    entityId?: number,
+    denominacion?: string
+  ) => Promise<ImageUploadResult>;
+  updateImage: (
+    file: File,
+    idImagen: number,
+    entityType: string,
+    denominacion?: string
+  ) => Promise<ImageUploadResult>;
+  deleteImage: (idImagen: number) => Promise<boolean>;
+  getImagesByEntity: (entityType: string, entityId: number) => Promise<any[]>;
 }
 
 export const useImageUpload = (): UseImageUploadReturn => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
 
-  // ==================== MÉTODOS LEGACY (SOLO ARCHIVOS) ====================
-
-  const uploadImage = async (file: File): Promise<ImageUploadResult> => {
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    try {
-      // Simular progreso de carga
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 100);
-
-      const result = await ImageService.uploadImage(file);
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      return result;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido al subir la imagen'
-      };
-    } finally {
-      setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
-    }
-  };
-
-  const deleteImage = async (filename: string): Promise<boolean> => {
-    try {
-      return await ImageService.deleteImage(filename);
-    } catch (error) {
-      console.error('Error deleting image:', error);
-      return false;
-    }
-  };
-
-  const validateImage = async (filename: string): Promise<boolean> => {
-    try {
-      const result = await ImageService.validateImage(filename);
-      return result.exists;
-    } catch (error) {
-      console.error('Error validating image:', error);
-      return false;
-    }
-  };
-
-  // ==================== NUEVOS MÉTODOS INTEGRADOS (ARCHIVO + BD) ====================
-
-  const uploadImageForArticulo = async (
-    file: File, 
-    idArticulo: number, 
-    denominacion: string = 'Imagen del producto'
+  const uploadImage = async (
+    file: File,
+    entityType: string,
+    entityId?: number,
+    denominacion?: string
   ): Promise<ImageUploadResult> => {
-    setIsUploading(true);
-    setUploadProgress(0);
+    setUploading(true);
+    setProgress(0);
 
     try {
-      // Simular progreso de carga
       const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
+        setProgress((prev) => (prev >= 90 ? prev : prev + 10));
       }, 100);
 
-      const result = await ImageService.uploadImageForArticulo(file, idArticulo, denominacion);
+      const result = await ImageService.uploadImage(
+        file,
+        entityType,
+        entityId,
+        denominacion
+      );
 
       clearInterval(progressInterval);
-      setUploadProgress(100);
-
+      setProgress(100);
       return result;
-    } catch (error) {
-      console.error('Error uploading image for articulo:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido al subir la imagen'
-      };
     } finally {
-      setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      setUploading(false);
+      setTimeout(() => setProgress(0), 500);
     }
   };
 
-  const updateImageForArticulo = async (
-    file: File, 
-    idArticulo: number, 
-    denominacion: string = 'Imagen del producto'
+  const updateImage = async (
+    file: File,
+    idImagen: number,
+    entityType: string,
+    denominacion?: string
   ): Promise<ImageUploadResult> => {
-    setIsUploading(true);
-    setUploadProgress(0);
+    setUploading(true);
+    setProgress(0);
 
     try {
-      // Simular progreso de carga
       const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
+        setProgress((prev) => (prev >= 90 ? prev : prev + 10));
       }, 100);
 
-      const result = await ImageService.updateImageForArticulo(file, idArticulo, denominacion);
+      const result = await ImageService.updateImage(
+        file,
+        idImagen,
+        entityType,
+        denominacion
+      );
 
       clearInterval(progressInterval);
-      setUploadProgress(100);
-
+      setProgress(100);
       return result;
-    } catch (error) {
-      console.error('Error updating image for articulo:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido al actualizar la imagen'
-      };
     } finally {
-      setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      setUploading(false);
+      setTimeout(() => setProgress(0), 500);
     }
   };
 
-  const deleteImageCompletely = async (idImagen: number): Promise<boolean> => {
-    try {
-      return await ImageService.deleteImageCompletely(idImagen);
-    } catch (error) {
-      console.error('Error deleting image completely:', error);
-      return false;
-    }
+  const deleteImage = async (idImagen: number): Promise<boolean> => {
+    return ImageService.deleteImage(idImagen);
   };
 
-  const getImagesByArticulo = async (idArticulo: number): Promise<any[]> => {
-    try {
-      return await ImageService.getImagesByArticulo(idArticulo);
-    } catch (error) {
-      console.error('Error getting images by articulo:', error);
-      return [];
-    }
+  const getImagesByEntity = async (
+    entityType: string,
+    entityId: number
+  ): Promise<any[]> => {
+    return ImageService.getImagesByEntity(entityType, entityId);
   };
 
   return {
-    // Métodos legacy
+    uploading,
+    progress,
     uploadImage,
+    updateImage,
     deleteImage,
-    validateImage,
-    
-    // Nuevos métodos integrados
-    uploadImageForArticulo,
-    updateImageForArticulo,
-    deleteImageCompletely,
-    getImagesByArticulo,
-    
-    // Estados
-    isUploading,
-    uploadProgress
+    getImagesByEntity,
   };
 };

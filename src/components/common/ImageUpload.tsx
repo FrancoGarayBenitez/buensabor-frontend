@@ -1,155 +1,174 @@
-// src/components/common/ImageUpload.tsx
-import React, { useRef, useState, useEffect } from 'react';
-import { useImageUpload } from '../../hooks/useImageUpload';
-import type { ImagenDTO } from '../../types/common/ImagenDTO';
+import React, { useRef, useState, useEffect } from "react";
+import { PhotoIcon } from "@heroicons/react/24/outline";
+import { useImageUpload } from "../../hooks/useImageUpload";
+import { IMAGE_CONFIG } from "../../config/imageConfig";
+import type { ImagenDTO } from "../../types/common/ImagenDTO";
+import ImageService from "../../services/ImageService";
 
 interface ImageUploadProps {
+  entityType: string;
+  entityId?: number;
   currentImage?: ImagenDTO | null;
   onImageChange: (imagen: ImagenDTO | null) => void;
-  className?: string;
-  placeholder?: string;
-  maxSize?: number; // en MB
+  onError?: (error: string) => void;
+  label?: string;
   required?: boolean;
   disabled?: boolean;
 }
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
+  entityType,
+  entityId,
   currentImage,
   onImageChange,
-  className = '',
-  placeholder = 'Haz clic para seleccionar una imagen o arrastra aquí',
-  maxSize = 5,
+  onError,
+  label = "Cargar Imagen",
   required = false,
-  disabled = false
+  disabled = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
-  const { uploadImage, deleteImage, isUploading, uploadProgress } = useImageUpload();
 
-  // Establecer preview inicial si hay imagen actual
+  const { uploading, progress, uploadImage, updateImage, deleteImage } =
+    useImageUpload();
+
   useEffect(() => {
-    if (currentImage?.url) {
-      setPreviewUrl(currentImage.url);
-    } else {
-      setPreviewUrl(null);
-    }
+    setPreviewUrl(currentImage?.url || null);
   }, [currentImage]);
 
   const handleFileSelect = async (file: File) => {
-    if (disabled) return;
-    
+    if (disabled || uploading) return;
+
     setError(null);
 
     try {
-      // Crear preview inmediato
       const reader = new FileReader();
       reader.onload = () => {
         setPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
 
-      // Subir archivo
-      const result = await uploadImage(file);
+      let result;
 
-      if (result.success && result.url && result.filename) {
+      if (currentImage?.idImagen) {
+        result = await ImageService.updateImage(
+          file,
+          currentImage.idImagen,
+          entityType,
+          file.name.split(".")[0]
+        );
+      } else {
+        result = await ImageService.uploadImage(
+          file,
+          entityType,
+          entityId,
+          file.name.split(".")[0]
+        );
+      }
+
+      if (result.success && result.url) {
         const newImage: ImagenDTO = {
-          idImagen: undefined, // Se asignará cuando se guarde en BD
-          denominacion: result.originalName || file.name,
-          url: result.url
+          idImagen: result.idImagen,
+          denominacion: result.denominacion || file.name,
+          url: result.url,
         };
         onImageChange(newImage);
       } else {
-        setError(result.error || 'Error al subir la imagen');
+        const errorMsg = result.error || IMAGE_CONFIG.ERRORS.UPLOAD_FAILED;
+        setError(errorMsg);
+        onError?.(errorMsg);
         setPreviewUrl(currentImage?.url || null);
       }
     } catch (err) {
-      setError('Error inesperado al procesar la imagen');
+      const errorMsg =
+        err instanceof Error ? err.message : IMAGE_CONFIG.ERRORS.UNKNOWN_ERROR;
+      setError(errorMsg);
+      onError?.(errorMsg);
       setPreviewUrl(currentImage?.url || null);
     }
   };
 
   const handleRemoveImage = async () => {
-    if (disabled) return;
-    
-    if (currentImage?.url) {
-      // Extraer filename de la URL
-      const filename = currentImage.url.split('/').pop();
-      if (filename) {
-        await deleteImage(filename);
+    if (disabled || uploading) return;
+
+    console.log(`🗑️ Eliminando imagen:`, currentImage?.idImagen);
+
+    if (currentImage?.idImagen) {
+      const deleted = await ImageService.deleteImage(currentImage.idImagen);
+      if (!deleted) {
+        console.warn(
+          `⚠️ Error al eliminar imagen en servidor, pero se limpia localmente`
+        );
       }
     }
-    
+
     onImageChange(null);
     setPreviewUrl(null);
     setError(null);
-    
+
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
   const handleClick = () => {
-    if (disabled || isUploading) return;
+    if (disabled || uploading) return;
     fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      handleFileSelect(e.target.files[0]);
+    }
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
     if (disabled) return;
     e.preventDefault();
-    e.stopPropagation();
     setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-    if (disabled) return;
     e.preventDefault();
-    e.stopPropagation();
     setIsDragOver(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    if (disabled) return;
-    e.preventDefault();
-    e.stopPropagation();
   };
 
   const handleDrop = (e: React.DragEvent) => {
     if (disabled) return;
     e.preventDefault();
-    e.stopPropagation();
     setIsDragOver(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      handleFileSelect(files[0]);
-    }
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (disabled) return;
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleFileSelect(files[0]);
+    if (e.dataTransfer.files?.[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
     }
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      {/* Área de carga */}
+    <div className="space-y-4">
+      <label className="block text-sm font-medium text-gray-700">
+        {label}
+        {required && <span className="text-red-600 ml-1">*</span>}
+      </label>
+
       <div
         className={`
-          relative border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ease-in-out
-          ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer'}
-          ${isDragOver && !disabled ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
-          ${isUploading ? 'pointer-events-none opacity-60' : ''}
+          relative border-2 border-dashed rounded-lg p-6 text-center transition-all
+          ${
+            disabled
+              ? "opacity-50 cursor-not-allowed bg-gray-50"
+              : "cursor-pointer"
+          }
+          ${
+            isDragOver && !disabled
+              ? "border-orange-500 bg-orange-50"
+              : "border-gray-300"
+          }
+          ${uploading ? "pointer-events-none opacity-60" : ""}
         `}
         onClick={handleClick}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
         <input
@@ -158,24 +177,24 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           accept="image/*"
           onChange={handleFileInputChange}
           className="hidden"
-          required={required && !currentImage}
           disabled={disabled}
         />
 
         {previewUrl ? (
           <div className="space-y-4">
-            <div className="relative">
+            <div className="relative inline-block">
               <img
                 src={previewUrl}
-                alt="Preview"
-                className="mx-auto max-h-48 rounded-lg shadow-md object-cover"
+                alt="preview"
+                className="h-40 w-40 object-cover rounded-lg shadow-md"
               />
-              {isUploading && (
+              {uploading && (
                 <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                  <div className="text-white text-sm">Subiendo...</div>
+                  <span className="text-white text-sm">{progress}%</span>
                 </div>
               )}
             </div>
+
             <div className="flex justify-center space-x-2">
               <button
                 type="button"
@@ -183,10 +202,10 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   e.stopPropagation();
                   handleClick();
                 }}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isUploading || disabled}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                disabled={uploading || disabled}
               >
-                Cambiar imagen
+                Cambiar
               </button>
               <button
                 type="button"
@@ -194,51 +213,43 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   e.stopPropagation();
                   handleRemoveImage();
                 }}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isUploading || disabled}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                disabled={uploading || disabled}
               >
                 Eliminar
               </button>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="text-6xl text-gray-400">📷</div>
+          <div className="space-y-3">
+            <PhotoIcon className="w-12 h-12 mx-auto text-gray-400" />
             <div>
-              <p className="text-gray-600">{disabled ? 'Carga de imagen deshabilitada' : placeholder}</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Formatos soportados: JPG, PNG, GIF, WEBP (máx. {maxSize}MB)
+              <p className="text-sm font-medium text-gray-700">
+                {uploading ? "Subiendo imagen..." : "Haz clic o arrastra aquí"}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                JPG, PNG, GIF, WEBP - Máx 5MB
               </p>
             </div>
           </div>
         )}
 
         {/* Barra de progreso */}
-        {isUploading && (
+        {uploading && (
           <div className="mt-4">
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              ></div>
+                className="bg-orange-500 h-2 rounded-full transition-all"
+                style={{ width: `${progress}%` }}
+              />
             </div>
-            <p className="text-sm text-gray-600 mt-2">Subiendo... {uploadProgress}%</p>
           </div>
         )}
       </div>
 
-      {/* Mensaje de error */}
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
-
-      {/* Información de la imagen actual */}
-      {currentImage && !isUploading && (
-        <div className="text-xs text-gray-500 space-y-1">
-          <p><strong>Nombre:</strong> {currentImage.denominacion}</p>
-          <p><strong>URL:</strong> {currentImage.url}</p>
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-600">⚠️ {error}</p>
         </div>
       )}
     </div>

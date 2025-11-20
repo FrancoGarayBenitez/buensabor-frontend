@@ -3,7 +3,9 @@ import { LoadingSpinner } from "./LoadingSpinner";
 
 interface ButtonProps {
   children: React.ReactNode;
-  onClick?: () => void;
+  onClick?:
+    | ((e: React.FormEvent | React.MouseEvent) => void | Promise<void>)
+    | (() => void);
   type?: "button" | "submit" | "reset";
   variant?: "primary" | "secondary" | "danger" | "success" | "outline";
   size?: "sm" | "md" | "lg";
@@ -50,7 +52,7 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button
       type={type}
-      onClick={onClick}
+      onClick={(e: any) => onClick?.(e)}
       disabled={isDisabled}
       style={{
         backgroundColor: variant === "primary" ? "#CD6C50" : undefined,

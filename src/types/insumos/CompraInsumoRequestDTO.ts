@@ -1,6 +1,6 @@
 export interface CompraInsumoRequestDTO {
-  insumoId: number;               // CAMBIA EL NOMBRE DEL CAMPO
+  insumoId: number;
   cantidad: number;
   precioUnitario: number;
-  fechaCompra: string;            // AGREGA LA FECHA
+  fechaCompra: string;
 }

@@ -24,10 +24,7 @@ export class ApiClienteService {
 
     if (token) {
       headers.Authorization = `Bearer ${token}`;
-      console.log(
-        "🔐 Token agregado a headers:",
-        token.substring(0, 20) + "..."
-      );
+      console.log("🔐 Token agregado a headers:", token);
     } else {
       console.log("⚠️ No hay token disponible para la petición");
     }

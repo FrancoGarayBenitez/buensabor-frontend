@@ -7,6 +7,7 @@ export interface TableColumn<T> {
   width?: string;
   align?: "left" | "center" | "right";
   sortable?: boolean;
+  stickyRight?: boolean;
 }
 
 interface TableProps<T> {
@@ -37,19 +38,19 @@ export function Table<T extends Record<string, any>>({
 
   if (loading) {
     return (
-      <div 
+      <div
         className="shadow-sm rounded-xl border overflow-hidden"
-        style={{ 
+        style={{
           backgroundColor: "#F7F7F5",
-          borderColor: "#E29C44"
+          borderColor: "#E29C44",
         }}
       >
         <div className="p-12 text-center">
-          <div 
+          <div
             className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4"
-            style={{ 
+            style={{
               borderColor: "#E29C44",
-              borderTopColor: "#CD6C50"
+              borderTopColor: "#CD6C50",
             }}
           ></div>
           <p style={{ color: "#9AAAB3" }}>Cargando datos...</p>
@@ -61,9 +62,9 @@ export function Table<T extends Record<string, any>>({
   return (
     <div
       className={`shadow-sm rounded-xl border overflow-hidden ${className}`}
-      style={{ 
+      style={{
         backgroundColor: "#F7F7F5",
-        borderColor: "#E29C44"
+        borderColor: "#E29C44",
       }}
     >
       <div className="overflow-x-auto">
@@ -73,17 +74,18 @@ export function Table<T extends Record<string, any>>({
               {columns.map((column, index) => (
                 <th
                   key={index}
-                  className={`px-6 py-4 text-xs font-semibold uppercase tracking-wider border-b ${
+                  className={`px-4 py-4 text-xs font-semibold uppercase tracking-wider border-b ${
                     column.align === "center"
                       ? "text-center"
                       : column.align === "right"
                       ? "text-right"
                       : "text-left"
-                  }`}
-                  style={{ 
+                  }${column.stickyRight ? " sticky right-0 z-20" : ""}`}
+                  style={{
                     width: column.width,
-                    color: "#F7F7F5",
-                    borderBottomColor: "#E29C44"
+                    color: "#F7F7F5", // header text color (visible sobre naranja)
+                    borderBottomColor: "#E29C44",
+                    backgroundColor: "#CD6C50", // mantener naranja en todos los th
                   }}
                 >
                   {column.title}
@@ -96,7 +98,7 @@ export function Table<T extends Record<string, any>>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-6 py-12 text-center"
+                  className="px-4 py-12 text-center"
                   style={{ color: "#9AAAB3" }}
                 >
                   <div className="text-4xl mb-2">📊</div>
@@ -125,14 +127,23 @@ export function Table<T extends Record<string, any>>({
                     return (
                       <td
                         key={colIndex}
-                        className={`px-6 py-4 whitespace-nowrap text-sm ${
+                        className={`px-4 py-4 whitespace-nowrap text-sm ${
                           column.align === "center"
                             ? "text-center"
                             : column.align === "right"
                             ? "text-right"
                             : "text-left"
+                        }${
+                          column.stickyRight
+                            ? " sticky right-0 bg-white z-10"
+                            : ""
                         }`}
-                        style={{ color: "#443639" }}
+                        style={{
+                          color: "#443639",
+                          backgroundColor: column.stickyRight
+                            ? "#fff"
+                            : undefined,
+                        }}
                       >
                         {content}
                       </td>

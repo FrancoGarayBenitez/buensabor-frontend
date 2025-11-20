@@ -11,4 +11,5 @@ export interface CategoriaResponseDTO {
   subcategorias: CategoriaSimpleDTO[];
 
   cantidadArticulos: number;
+  cantidadSubcategorias?: number;
 }

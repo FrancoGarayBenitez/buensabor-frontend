@@ -1,8 +1,8 @@
-import React from 'react';
-import { Modal } from '../common/Modal';
-import { CategoriaForm } from './CategoriaForm';
-import type { CategoriaRequestDTO } from '../../types/categorias/CategoriaRequestDTO';
-import type { CategoriaResponseDTO } from '../../types/categorias/CategoriaResponseDTO';
+import React from "react";
+import { Modal } from "../common/Modal";
+import { CategoriaForm } from "./CategoriaForm";
+import type { CategoriaRequestDTO } from "../../types/categorias/CategoriaRequestDTO";
+import type { CategoriaResponseDTO } from "../../types/categorias/CategoriaResponseDTO";
 
 interface CategoriaModalProps {
   isOpen: boolean;
@@ -21,7 +21,7 @@ export const CategoriaModal: React.FC<CategoriaModalProps> = ({
   onSubmit,
   loading = false,
 }) => {
-  const title = categoria ? 'Editar Categoría' : 'Nueva Categoría';
+  const title = categoria ? "Editar Categoría" : "Nueva Categoría";
 
   const handleSubmit = async (data: CategoriaRequestDTO) => {
     await onSubmit(data);
@@ -29,12 +29,7 @@ export const CategoriaModal: React.FC<CategoriaModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title}
-      size="md"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="xl">
       <CategoriaForm
         categoria={categoria}
         categoriasPadre={categoriasPadre}

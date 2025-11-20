@@ -64,9 +64,29 @@ export class InsumoService {
 
   async delete(id: number): Promise<void> {
     try {
-      await apiClienteService.deleteRequest<void>(`${this.endpoint}/${id}`);
-    } catch (error: any) {
-      throw this.handleError(error);
+      const response = await apiClienteService.deleteRequest<void>(
+        `${this.endpoint}/${id}`
+      );
+      console.log(`✅ Insumo ${id} eliminado correctamente`);
+      return response;
+    } catch (error) {
+      console.error("❌ Error en delete:", error);
+
+      // ✅ Extraer mensaje de error del backend
+      if (error instanceof Error) {
+        const message = error.message;
+
+        // Si contiene "COMPRAS_ASOCIADAS" o menciona compras
+        if (message.includes("compra") || message.includes("COMPRAS")) {
+          throw new Error(
+            "No se puede eliminar este insumo porque tiene compras registradas. " +
+              "Primero debe eliminar las compras asociadas o contactar al administrador."
+          );
+        }
+
+        throw error;
+      }
+      throw error;
     }
   }
 
@@ -78,25 +98,28 @@ export class InsumoService {
   async uploadImagen(
     id: number,
     file: File,
-    denominacion: string = 'Imagen del producto'
+    denominacion: string = "Imagen del producto"
   ): Promise<any> {
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('denominacion', denominacion);
+      formData.append("file", file);
+      formData.append("denominacion", denominacion);
 
-      const response = await fetch(`http://localhost:8080/api${this.endpoint}/${id}/imagen`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          // No incluir Content-Type para FormData, el browser lo maneja automáticamente
-          // Aquí deberías incluir el token de Auth0 si es necesario
+      const response = await fetch(
+        `http://localhost:8080/api${this.endpoint}/${id}/imagen`,
+        {
+          method: "POST",
+          body: formData,
+          headers: {
+            // No incluir Content-Type para FormData, el browser lo maneja automáticamente
+            // Aquí deberías incluir el token de Auth0 si es necesario
+          },
         }
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al subir imagen');
+        throw new Error(errorData.error || "Error al subir imagen");
       }
 
       return await response.json();
@@ -111,24 +134,27 @@ export class InsumoService {
   async updateImagen(
     id: number,
     file: File,
-    denominacion: string = 'Imagen del producto'
+    denominacion: string = "Imagen del producto"
   ): Promise<any> {
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('denominacion', denominacion);
+      formData.append("file", file);
+      formData.append("denominacion", denominacion);
 
-      const response = await fetch(`http://localhost:8080/api${this.endpoint}/${id}/imagen`, {
-        method: 'PUT',
-        body: formData,
-        headers: {
-          // Aquí deberías incluir el token de Auth0 si es necesario
+      const response = await fetch(
+        `http://localhost:8080/api${this.endpoint}/${id}/imagen`,
+        {
+          method: "PUT",
+          body: formData,
+          headers: {
+            // Aquí deberías incluir el token de Auth0 si es necesario
+          },
         }
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al actualizar imagen');
+        throw new Error(errorData.error || "Error al actualizar imagen");
       }
 
       return await response.json();
@@ -142,16 +168,19 @@ export class InsumoService {
    */
   async deleteImagenes(id: number): Promise<any> {
     try {
-      const response = await fetch(`http://localhost:8080/api${this.endpoint}/${id}/imagenes`, {
-        method: 'DELETE',
-        headers: {
-          // Aquí deberías incluir el token de Auth0 si es necesario
+      const response = await fetch(
+        `http://localhost:8080/api${this.endpoint}/${id}/imagenes`,
+        {
+          method: "DELETE",
+          headers: {
+            // Aquí deberías incluir el token de Auth0 si es necesario
+          },
         }
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al eliminar imágenes');
+        throw new Error(errorData.error || "Error al eliminar imágenes");
       }
 
       return await response.json();
@@ -165,10 +194,12 @@ export class InsumoService {
    */
   async getImagenes(id: number): Promise<any[]> {
     try {
-      const response = await fetch(`http://localhost:8080/api${this.endpoint}/${id}/imagenes`);
+      const response = await fetch(
+        `http://localhost:8080/api${this.endpoint}/${id}/imagenes`
+      );
 
       if (!response.ok) {
-        throw new Error('Error al obtener imágenes');
+        throw new Error("Error al obtener imágenes");
       }
 
       return await response.json();

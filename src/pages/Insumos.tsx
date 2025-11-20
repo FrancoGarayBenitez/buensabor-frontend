@@ -10,10 +10,18 @@ import { unidadMedidaService } from "../services";
 import type { ArticuloInsumoResponseDTO } from "../types/insumos/ArticuloInsumoResponseDTO";
 import type { ArticuloInsumoRequestDTO } from "../types/insumos/ArticuloInsumoRequestDTO";
 import type { UnidadMedidaDTO } from "../services";
+import HistoricoPrecioService from "../services/HistoricoPrecioService";
 
 export const Insumos: React.FC = () => {
-  const { insumos, loading, error, createInsumo, updateInsumo, deleteInsumo, refresh } =
-    useInsumos();
+  const {
+    insumos,
+    loading,
+    error,
+    createInsumo,
+    updateInsumo,
+    deleteInsumo,
+    refresh,
+  } = useInsumos();
 
   const { categorias } = useCategorias();
 
@@ -92,26 +100,76 @@ export const Insumos: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (
-      !window.confirm("¿Está seguro de que desea eliminar este ingrediente?")
-    ) {
+    const insumo = insumos.find((i) => i.idArticulo === id);
+    const nombreInsumo = insumo?.denominacion || "el insumo";
+
+    // ✅ Verificar si tiene compras registradas
+    let tieneCompras = false;
+    let mensajeAdvertencia = "";
+
+    try {
+      const stats = await HistoricoPrecioService.getEstadisticas(id);
+      if (stats && stats.totalRegistros > 0) {
+        tieneCompras = true;
+        mensajeAdvertencia =
+          `\n\n⚠️ ADVERTENCIA: Este insumo tiene ${stats.totalRegistros} compra(s) registrada(s).\n` +
+          `Precio Promedio: $${stats.precioPromedio.toFixed(2)}\n` +
+          `Rango: $${stats.precioMinimo.toFixed(
+            2
+          )} - $${stats.precioMaximo.toFixed(2)}`;
+      }
+    } catch (error) {
+      console.error("Error obteniendo estadísticas:", error);
+    }
+
+    // ✅ Mensaje de confirmación
+    const mensaje =
+      `¿Está seguro de que desea eliminar "${nombreInsumo}"?` +
+      mensajeAdvertencia +
+      (tieneCompras ? "\n\nEsta acción no se puede deshacer." : "");
+
+    if (!window.confirm(mensaje)) {
       return;
     }
 
     try {
       await deleteInsumo(id);
+
       setAlert({
         type: "success",
-        message: "Ingrediente eliminado correctamente",
+        message: `"${nombreInsumo}" eliminado correctamente${
+          tieneCompras ? " (incluida su compras)" : ""
+        }`,
       });
     } catch (error) {
-      setAlert({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Error al eliminar el ingrediente",
-      });
+      const errorMsg =
+        error instanceof Error
+          ? error.message
+          : "Error al eliminar el ingrediente";
+
+      console.error("❌ Error eliminando insumo:", error);
+
+      // ✅ Detectar si es por compras asociadas
+      if (
+        errorMsg.includes("compra") ||
+        errorMsg.includes("COMPRAS") ||
+        errorMsg.includes("compra")
+      ) {
+        setAlert({
+          type: "error",
+          message:
+            `No se puede eliminar "${nombreInsumo}" porque tiene compras registradas.\n\n` +
+            `Opciones:\n` +
+            `1. Eliminar manualmente las compras (historial)\n` +
+            `2. Contactar al administrador\n\n` +
+            `Detalle: ${errorMsg}`,
+        });
+      } else {
+        setAlert({
+          type: "error",
+          message: errorMsg,
+        });
+      }
     }
   };
 
@@ -195,14 +253,13 @@ export const Insumos: React.FC = () => {
           </div>
           <div className="text-sm text-gray-600">Stock Crítico</div>
         </div>
-         <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-white p-4 rounded-lg shadow">
           <div className="text-2xl font-bold text-pink-600">
             {stats.ventaDirecta}
           </div>
           <div className="text-sm text-gray-600">Venta Directa</div>
         </div>
       </div>
-
 
       {/* Alertas de Stock */}
       {stats.stockCritico > 0 && (

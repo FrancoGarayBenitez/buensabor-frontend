@@ -1,278 +1,292 @@
-// src/services/ImageService.ts
-
-const API_BASE_URL = 'http://localhost:8080/api';
+import { IMAGE_CONFIG, validateImageFile } from "../config/imageConfig";
+import { apiClienteService } from "./ApiClienteService";
+import AuthPasswordService from "./AuthPasswordService";
 
 export interface ImageUploadResult {
   success: boolean;
   idImagen?: number;
-  filename?: string;
   url?: string;
-  originalName?: string;
   denominacion?: string;
-  size?: number;
-  contentType?: string;
   error?: string;
-  message?: string;
 }
 
-export interface ImageValidationResult {
-  exists: boolean;
-  url?: string;
-  filename?: string;
-  hasDBRecord?: boolean;
-}
-
-export class ImageService {
-  
+/**
+ * Servicio centralizado para manejar imágenes
+ * Usa ApiClienteService para headers y autenticación
+ */
+const ImageService = {
   /**
-   * ⚠️ MÉTODO LEGACY - Solo sube archivo sin BD
-   * Usar uploadImageForArticulo() en su lugar
+   * ✅ Sube imagen asociada a una entidad (archivo + BD)
+   * Funciona para: INSUMO, MANUFACTURADO, CLIENTE, PROMOCION
+   *
+   * POST /api/imagenes/upload/{entityType}
+   * POST /api/imagenes/upload/{entityType}/{entityId}
    */
-  static async uploadImage(file: File): Promise<ImageUploadResult> {
+  uploadImage: async (
+    file: File,
+    entityType: string,
+    entityId?: number,
+    denominacion: string = file.name.split(".")[0]
+  ): Promise<ImageUploadResult> => {
     try {
-      // Validaciones del lado del cliente
-      if (!file) {
-        throw new Error('No se ha seleccionado ningún archivo');
-      }
-
-      // Validar tipo de archivo
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        throw new Error('Tipo de archivo no válido. Solo se permiten: JPG, PNG, GIF, WEBP');
-      }
-
-      // Validar tamaño (máximo 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('El archivo es demasiado grande. Máximo 5MB');
+      // Validar archivo ANTES de enviar
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        console.warn(`⚠️ Validación fallida:`, validationError);
+        return { success: false, error: validationError };
       }
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
+      formData.append("denominacion", denominacion);
 
-      const response = await fetch(`${API_BASE_URL}/imagenes/upload`, {
-        method: 'POST',
+      const endpoint = entityId
+        ? `/imagenes/upload/${entityType}/${entityId}`
+        : `/imagenes/upload/${entityType}`;
+
+      console.log(
+        `📤 Subiendo imagen: ${entityType}${
+          entityId ? ` (ID: ${entityId})` : ""
+        }`
+      );
+
+      // Usar fetch directamente con headers de ApiClienteService
+      const token = AuthPasswordService.getToken();
+      const headers: Record<string, string> = {};
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+        console.log("🔐 Token agregado a upload");
+      }
+
+      const response = await fetch(`${apiClienteService.baseURL}${endpoint}`, {
+        method: "POST",
+        headers, // NO incluir Content-Type (FormData lo agrega automáticamente)
         body: formData,
       });
 
-      const result = await response.json();
+      console.log(`📨 Respuesta upload: ${response.status}`);
 
       if (!response.ok) {
-        throw new Error(result.error || 'Error al subir la imagen');
+        try {
+          const error = await response.json();
+          const errorMsg = error.error || IMAGE_CONFIG.ERRORS.UPLOAD_FAILED;
+          console.error(`❌ Error en upload:`, errorMsg);
+          return { success: false, error: errorMsg };
+        } catch {
+          console.error(`❌ Error desconocido en upload`);
+          return { success: false, error: IMAGE_CONFIG.ERRORS.UPLOAD_FAILED };
+        }
       }
-
-      return { ...result, warning: 'Archivo subido sin registro en BD. Use uploadImageForArticulo() para asociar a artículo' };
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido al subir la imagen'
-      };
-    }
-  }
-
-  /**
-   * ✅ NUEVO - Sube imagen directamente asociada a un artículo (archivo + BD)
-   */
-  static async uploadImageForArticulo(
-    file: File, 
-    idArticulo: number, 
-    denominacion: string = 'Imagen del producto'
-  ): Promise<ImageUploadResult> {
-    try {
-      // Validaciones del lado del cliente
-      if (!file) {
-        throw new Error('No se ha seleccionado ningún archivo');
-      }
-
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        throw new Error('Tipo de archivo no válido. Solo se permiten: JPG, PNG, GIF, WEBP');
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('El archivo es demasiado grande. Máximo 5MB');
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('denominacion', denominacion);
-
-      const response = await fetch(`${API_BASE_URL}/imagenes/upload-for-articulo/${idArticulo}`, {
-        method: 'POST',
-        body: formData,
-      });
 
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al subir la imagen');
-      }
-
+      console.log(`✅ Imagen subida:`, result);
       return result;
     } catch (error) {
-      console.error('Error uploading image for articulo:', error);
+      console.error("❌ Excepción en uploadImage:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido al subir la imagen'
+        error: IMAGE_CONFIG.ERRORS.UNKNOWN_ERROR,
       };
     }
-  }
+  },
 
   /**
-   * ✅ NUEVO - Actualiza imagen de un artículo (elimina anterior + sube nueva)
+   * ✅ Actualiza imagen (elimina anterior + sube nueva)
+   *
+   * PUT /api/imagenes/{idImagen}
    */
-  static async updateImageForArticulo(
-    file: File, 
-    idArticulo: number, 
-    denominacion: string = 'Imagen del producto'
-  ): Promise<ImageUploadResult> {
+  updateImage: async (
+    file: File,
+    idImagen: number,
+    entityType: string,
+    denominacion: string = file.name.split(".")[0]
+  ): Promise<ImageUploadResult> => {
     try {
-      // Validaciones del lado del cliente
-      if (!file) {
-        throw new Error('No se ha seleccionado ningún archivo');
-      }
-
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        throw new Error('Tipo de archivo no válido. Solo se permiten: JPG, PNG, GIF, WEBP');
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('El archivo es demasiado grande. Máximo 5MB');
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        console.warn(`⚠️ Validación fallida:`, validationError);
+        return { success: false, error: validationError };
       }
 
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('denominacion', denominacion);
+      formData.append("file", file);
+      formData.append("denominacion", denominacion);
 
-      const response = await fetch(`${API_BASE_URL}/imagenes/update-articulo/${idArticulo}`, {
-        method: 'PUT',
-        body: formData,
-      });
+      console.log(`🔄 Actualizando imagen: ${idImagen}`);
 
-      const result = await response.json();
+      const token = AuthPasswordService.getToken();
+      const headers: Record<string, string> = {};
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al actualizar la imagen');
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
       }
 
+      const response = await fetch(
+        `${apiClienteService.baseURL}/imagenes/${idImagen}`,
+        {
+          method: "PUT",
+          headers,
+          body: formData,
+        }
+      );
+
+      console.log(`📨 Respuesta update: ${response.status}`);
+
+      if (!response.ok) {
+        try {
+          const error = await response.json();
+          const errorMsg = error.error || IMAGE_CONFIG.ERRORS.UPLOAD_FAILED;
+          console.error(`❌ Error en update:`, errorMsg);
+          return { success: false, error: errorMsg };
+        } catch {
+          console.error(`❌ Error desconocido en update`);
+          return { success: false, error: IMAGE_CONFIG.ERRORS.UPLOAD_FAILED };
+        }
+      }
+
+      const result = await response.json();
+      console.log(`✅ Imagen actualizada:`, result);
       return result;
     } catch (error) {
-      console.error('Error updating image for articulo:', error);
+      console.error("❌ Excepción en updateImage:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido al actualizar la imagen'
+        error: IMAGE_CONFIG.ERRORS.UNKNOWN_ERROR,
       };
     }
-  }
+  },
 
   /**
-   * ✅ NUEVO - Elimina imagen completamente (archivo + BD)
+   * ✅ Elimina imagen completamente (archivo + BD)
+   *
+   * DELETE /api/imagenes/{idImagen}
    */
-  static async deleteImageCompletely(idImagen: number): Promise<boolean> {
+  deleteImage: async (idImagen: number): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/imagenes/${idImagen}`, {
-        method: 'DELETE',
-      });
+      console.log(`🗑️ Eliminando imagen: ${idImagen}`);
 
-      if (!response.ok) {
-        throw new Error('Error al eliminar la imagen');
+      const token = AuthPasswordService.getToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
       }
 
-      const result = await response.json();
-      return result.success;
+      const response = await fetch(
+        `${apiClienteService.baseURL}/imagenes/${idImagen}`,
+        {
+          method: "DELETE",
+          headers,
+        }
+      );
+
+      console.log(`📨 Respuesta delete: ${response.status}`);
+
+      if (!response.ok) {
+        console.error(`❌ Error al eliminar imagen`);
+        return false;
+      }
+
+      try {
+        const result = await response.json();
+        console.log(`✅ Imagen eliminada:`, result);
+        return result.success ?? true;
+      } catch {
+        // Si no hay body en respuesta (204), asumir éxito
+        console.log(`✅ Imagen eliminada (sin cuerpo de respuesta)`);
+        return true;
+      }
     } catch (error) {
-      console.error('Error deleting image completely:', error);
+      console.error("❌ Excepción en deleteImage:", error);
       return false;
     }
-  }
+  },
 
   /**
-   * ✅ NUEVO - Obtiene todas las imágenes de un artículo
+   * ✅ Obtiene imágenes de una entidad
+   *
+   * GET /api/imagenes/{entityType}/{entityId}
    */
-  static async getImagesByArticulo(idArticulo: number): Promise<any[]> {
+  getImagesByEntity: async (
+    entityType: string,
+    entityId: number
+  ): Promise<any[]> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/imagenes/articulo/${idArticulo}`);
-      
-      if (!response.ok) {
-        throw new Error('Error al obtener imágenes del artículo');
+      console.log(`🔍 Obteniendo imágenes de ${entityType}/${entityId}`);
+
+      const token = AuthPasswordService.getToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
       }
 
-      return await response.json();
+      const response = await fetch(
+        `${apiClienteService.baseURL}/imagenes/${entityType}/${entityId}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`⚠️ Error obteniendo imágenes: ${response.status}`);
+        return [];
+      }
+
+      const result = await response.json();
+      console.log(`✅ Imágenes obtenidas: ${result.length} encontradas`);
+      return result;
     } catch (error) {
-      console.error('Error getting images by articulo:', error);
+      console.error("❌ Excepción en getImagesByEntity:", error);
       return [];
     }
-  }
+  },
 
   /**
-   * ⚠️ MÉTODO LEGACY - Solo elimina archivo físico
-   * Usar deleteImageCompletely() en su lugar
+   * ✅ Obtiene una imagen por ID
+   *
+   * GET /api/imagenes/{idImagen}
    */
-  static async deleteImage(filename: string): Promise<boolean> {
+  getImageById: async (idImagen: number): Promise<any | null> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/imagenes/delete/${filename}`, {
-        method: 'DELETE',
-      });
+      console.log(`🔍 Obteniendo imagen: ${idImagen}`);
+
+      const token = AuthPasswordService.getToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `${apiClienteService.baseURL}/imagenes/${idImagen}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
 
       if (!response.ok) {
-        throw new Error('Error al eliminar la imagen');
+        console.warn(`⚠️ Imagen no encontrada: ${idImagen}`);
+        return null;
       }
 
       const result = await response.json();
-      console.warn('⚠️ Solo se eliminó el archivo. Registro en BD no afectado. Use deleteImageCompletely()');
-      return result.success;
-    } catch (error) {
-      console.error('Error deleting image:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Valida si una imagen existe en el servidor
-   */
-  static async validateImage(filename: string): Promise<ImageValidationResult> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/imagenes/validate/${filename}`);
-      
-      if (!response.ok) {
-        return { exists: false };
-      }
-
-      const result = await response.json();
+      console.log(`✅ Imagen obtenida:`, result);
       return result;
     } catch (error) {
-      console.error('Error validating image:', error);
-      return { exists: false };
-    }
-  }
-
-  /**
-   * Extrae el nombre del archivo de una URL
-   */
-  static extractFilenameFromUrl(url: string): string | null {
-    try {
-      const parts = url.split('/');
-      return parts[parts.length - 1] || null;
-    } catch (error) {
-      console.error('Error extracting filename from URL:', error);
+      console.error("❌ Excepción en getImageById:", error);
       return null;
     }
-  }
+  },
+};
 
-  /**
-   * Verifica si una URL es una imagen válida
-   */
-  static isValidImageUrl(url: string): boolean {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-    const lowerUrl = url.toLowerCase();
-    return imageExtensions.some(ext => lowerUrl.endsWith(ext));
-  }
-
-  /**
-   * Genera una URL de placeholder para imágenes
-   */
-  static getPlaceholderUrl(width: number = 300, height: number = 200): string {
-    return `https://via.placeholder.com/${width}x${height}/f3f4f6/6b7280?text=Sin+Imagen`;
-  }
-}
+export default ImageService;

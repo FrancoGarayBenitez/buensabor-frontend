@@ -3,6 +3,7 @@ import { Table, type TableColumn } from "../common/Table";
 import { Button } from "../common/Button";
 import type { ArticuloInsumoResponseDTO } from "../../types/insumos/ArticuloInsumoResponseDTO";
 import CompraForm from "./CompraForm";
+import { HistorialPrecios } from "./HistorialPrecios";
 
 interface InsumosListProps {
   insumos: ArticuloInsumoResponseDTO[];
@@ -22,6 +23,9 @@ export const InsumosList: React.FC<InsumosListProps> = ({
   onRefresh,
 }) => {
   const [compraInsumoId, setCompraInsumoId] = useState<number | null>(null);
+  const [historialInsumoId, setHistorialInsumoId] = useState<number | null>(
+    null
+  );
 
   // Buscador
   const [busqueda, setBusqueda] = useState("");
@@ -158,7 +162,19 @@ export const InsumosList: React.FC<InsumosListProps> = ({
       title: "Precio Compra",
       width: "12%",
       align: "right",
-      render: (value) => `$${value.toFixed(2)}`,
+      render: (value, record) => (
+        <div className="flex flex-col items-end gap-2">
+          <span className="font-semibold">${value.toFixed(2)}</span>
+          {/* ✅ NUEVO: Botón para ver historial */}
+          <button
+            onClick={() => setHistorialInsumoId(record.idArticulo)}
+            className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded transition-colors"
+            title="Ver historial de precios"
+          >
+            📊 Historial
+          </button>
+        </div>
+      ),
     },
     {
       key: "stockActual",
@@ -201,6 +217,7 @@ export const InsumosList: React.FC<InsumosListProps> = ({
       title: "Acciones",
       width: "11%",
       align: "center",
+      stickyRight: true,
       render: (_, record) => (
         <div className="flex justify-center space-x-1">
           <Button size="sm" variant="outline" onClick={() => onEdit(record)}>
@@ -306,14 +323,26 @@ export const InsumosList: React.FC<InsumosListProps> = ({
         }
       />
 
+      {/* Modal historial */}
+      {historialInsumoId !== null && (
+        <HistorialPrecios
+          insumoId={historialInsumoId}
+          onClose={() => setHistorialInsumoId(null)}
+          onDelete={() => onRefresh()}
+        />
+      )}
+
       {/* Modal compra */}
       {compraInsumoId !== null && (
-        <div className="fixed inset-0 bg-opacity-30 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-lg">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-white p-5 rounded-lg w-full max-w-sm shadow-xl max-h-[85vh] overflow-y-auto">
             <CompraForm
               insumoId={compraInsumoId as number}
               onClose={cerrarCompra}
-              onSuccess={onRefresh}
+              onSuccess={() => {
+                cerrarCompra();
+                onRefresh();
+              }}
             />
           </div>
         </div>

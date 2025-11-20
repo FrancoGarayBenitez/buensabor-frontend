@@ -181,7 +181,7 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="min-h-screen flex flex-col">
     <Header />
     <div className="flex flex-1 overflow-hidden">
-      <nav className="w-64 bg-white shadow-lg border-r border-[#99AAB3] border-opacity-30 flex-shrink-0 overflow-y-auto">
+      <nav className="w-48 bg-white shadow-lg border-r border-[#99AAB3] border-opacity-30 flex-shrink-0 overflow-y-auto">
         <div className="p-6 space-y-3">
           <div className="text-xs font-semibold text-[#99AAB3] uppercase tracking-wide mb-4 px-2">
             Menú Principal
