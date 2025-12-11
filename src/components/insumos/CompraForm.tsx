@@ -1,204 +1,230 @@
 import React, { useEffect, useState } from "react";
-import { insumoService } from "../../services/InsumoService";
+import { insumoService } from "../../services";
+import { compraService } from "../../services";
 import type { ArticuloInsumoResponseDTO } from "../../types/insumos/ArticuloInsumoResponseDTO";
-import { Button } from "../common/Button";
-import { compraService } from "../../services/CompraService";
 import type { CompraInsumoRequestDTO } from "../../types/insumos/CompraInsumoRequestDTO";
+import { Button } from "../common/Button";
+import { Alert } from "../common/Alert";
 
-type Props = {
+interface CompraFormProps {
   insumoId: number;
   onClose: () => void;
   onSuccess: () => void;
-};
+}
 
-const CompraForm: React.FC<Props> = ({ insumoId, onClose, onSuccess }) => {
+export const CompraForm: React.FC<CompraFormProps> = ({
+  insumoId,
+  onClose,
+  onSuccess,
+}) => {
+  // ==================== ESTADO ====================
+
   const [insumo, setInsumo] = useState<ArticuloInsumoResponseDTO | null>(null);
-
-  // COMPRA: Lo que ingresa el admin
-  const [cantidadComprada, setCantidadComprada] = useState<number>(1);
-  const [precioCompra, setPrecioCompra] = useState<number>(0);
-
+  const [cantidad, setCantidad] = useState<string>("1");
+  const [precioUnitario, setPrecioUnitario] = useState<string>("0");
+  const [loading, setLoading] = useState(true);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [compraExitosa, setCompraExitosa] = useState<boolean>(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingPrecio, setLoadingPrecio] = useState(true);
+  const [exitoCompra, setExitoCompra] = useState(false);
 
-  // ✅ Cargar insumo + precio sugerido de VENTA
+  // ==================== EFECTOS ====================
+
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInsumo = async () => {
       try {
-        // 1. Cargar datos del insumo
         const data = await insumoService.getById(insumoId);
         setInsumo(data);
+        setError(null);
       } catch (err) {
-        setError("No se pudo cargar el insumo.");
+        setError("No se pudo cargar el insumo");
         console.error("❌ Error:", err);
       } finally {
-        setLoadingPrecio(false);
+        setLoading(false);
       }
     };
 
-    fetchData();
+    fetchInsumo();
   }, [insumoId]);
+
+  // ==================== MANEJADORES ====================
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!cantidadComprada || cantidadComprada <= 0) {
-      setError("Cantidad requerida (>0)");
+    const cantidadNum = parseFloat(cantidad);
+    const precioUnitarioNum = parseFloat(precioUnitario);
+
+    if (isNaN(cantidadNum) || cantidadNum <= 0) {
+      setError("Cantidad debe ser mayor a 0");
       return;
     }
 
-    if (!precioCompra || precioCompra <= 0) {
-      setError("Precio de compra requerido (>0)");
+    if (isNaN(precioUnitarioNum) || precioUnitarioNum <= 0) {
+      setError("Precio unitario debe ser mayor a 0");
       return;
     }
 
-    setLoading(true);
+    setSubmitLoading(true);
 
     try {
-      // Registrar la COMPRA (precio de compra)
-      const request: CompraInsumoRequestDTO = {
-        insumoId: insumoId,
-        cantidad: cantidadComprada,
-        precioUnitario: precioCompra,
-        fechaCompra: new Date().toISOString().split("T")[0],
+      const compra: CompraInsumoRequestDTO = {
+        idArticuloInsumo: insumoId,
+        cantidad: parseFloat(cantidad),
+        precioUnitario: parseFloat(precioUnitario),
       };
 
-      await compraService.registrarCompra(request);
+      await compraService.registrarCompra(compra);
 
-      setCompraExitosa(true);
-      onSuccess();
+      setExitoCompra(true);
 
       setTimeout(() => {
-        setCompraExitosa(false);
-        setCantidadComprada(1);
-        setPrecioCompra(0);
+        onSuccess();
         onClose();
       }, 1500);
-    } catch (e) {
-      setError("Error al registrar compra");
-      console.error("❌ Error:", e);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Error al registrar compra"
+      );
+      console.error("❌ Error:", err);
     } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
-  if (!insumo) return null;
+  // ==================== RENDER ====================
 
-  const subtotalCompra = cantidadComprada * precioCompra;
+  if (loading) {
+    return (
+      <div className="text-center py-4">
+        <p className="text-gray-600">Cargando...</p>
+      </div>
+    );
+  }
+
+  if (!insumo) {
+    return null;
+  }
+
+  if (exitoCompra) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-5xl mb-2">✅</div>
+        <p className="text-green-700 font-semibold text-lg">
+          Compra registrada correctamente
+        </p>
+      </div>
+    );
+  }
+
+  const cantidadNum = parseFloat(cantidad) || 0;
+  const precioUnitarioNum = parseFloat(precioUnitario) || 0;
+  const subtotal = cantidadNum * precioUnitarioNum;
 
   return (
     <>
-      {compraExitosa ? (
-        <div className="text-center py-6">
-          <div className="text-5xl mb-2">✅</div>
-          <p className="text-green-700 font-semibold text-lg">
-            Compra registrada
-          </p>
-        </div>
-      ) : (
-        <>
-          <h2 className="text-base font-semibold mb-3 text-gray-800">
-            🛒 {insumo.denominacion}
-          </h2>
+      <h2 className="text-lg font-semibold mb-4 text-gray-800">
+        🛒 Registrar Compra: {insumo.denominacion}
+      </h2>
 
-          {error && (
-            <div className="bg-red-100 text-red-700 px-2 py-1 mb-2 rounded text-xs">
-              ⚠️ {error}
-            </div>
-          )}
-
-          {/* Info del insumo */}
-          <div className="text-xs text-gray-600 space-y-0.5 mb-3 bg-gray-50 p-2 rounded">
-            <p>
-              <strong>Stock actual:</strong> {insumo.stockActual} /{" "}
-              {insumo.stockMaximo}
-            </p>
-            <p>
-              <strong>Unidad:</strong> {insumo.denominacionUnidadMedida}
-            </p>
-          </div>
-
-          {/* ✅ SECCIÓN 1: INGRESO DE COMPRA */}
-          <div className="border-b pb-3 mb-3">
-            <h3 className="text-xs font-semibold text-gray-700 mb-2">
-              📦 COMPRA AL PROVEEDOR
-            </h3>
-
-            <div className="space-y-2">
-              {/* Cantidad comprada */}
-              <div>
-                <label className="block text-xs font-medium mb-0.5">
-                  Cantidad Comprada
-                </label>
-                <input
-                  type="number"
-                  value={cantidadComprada}
-                  onChange={(e) =>
-                    setCantidadComprada(parseFloat(e.target.value))
-                  }
-                  placeholder="1"
-                  required
-                  disabled={loading}
-                  min={0.01}
-                  step={0.01}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                />
-              </div>
-
-              {/* Precio de compra */}
-              <div>
-                <label className="block text-xs font-medium mb-0.5">
-                  Precio de Compra (Unitario)
-                </label>
-                <input
-                  type="number"
-                  value={precioCompra}
-                  onChange={(e) => setPrecioCompra(parseFloat(e.target.value))}
-                  placeholder="0.00"
-                  required
-                  disabled={loading}
-                  min={0.01}
-                  step={0.01}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                />
-              </div>
-
-              {/* Subtotal compra */}
-              {cantidadComprada > 0 && precioCompra > 0 && (
-                <div className="bg-blue-50 px-2 py-1.5 rounded text-xs border border-blue-200">
-                  <strong>Gasto Total:</strong> {cantidadComprada} × $
-                  {precioCompra.toFixed(2)} = ${subtotalCompra.toFixed(2)}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Botones */}
-          <div className="flex gap-2 pt-2 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              onClick={handleSubmit}
-              disabled={loading || !cantidadComprada || !precioCompra}
-              loading={loading}
-              className="flex-1"
-            >
-              {loading ? "..." : "Guardar Compra"}
-            </Button>
-          </div>
-        </>
+      {error && (
+        <Alert type="error" message={error} onClose={() => setError(null)} />
       )}
+
+      {/* Información del insumo */}
+      <div className="bg-gray-50 p-3 rounded-lg mb-4 text-sm space-y-1">
+        <p>
+          <span className="text-gray-600">Stock actual:</span>{" "}
+          <span className="font-semibold">
+            {insumo.stockActual} / {insumo.stockMaximo}
+          </span>
+        </p>
+        <p>
+          <span className="text-gray-600">Unidad:</span>{" "}
+          <span className="font-semibold">
+            {insumo.denominacionUnidadMedida}
+          </span>
+        </p>
+        <p>
+          <span className="text-gray-600">Categoría:</span>{" "}
+          <span className="font-semibold">{insumo.denominacionCategoria}</span>
+        </p>
+      </div>
+
+      {/* Formulario */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Cantidad */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Cantidad Comprada <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+            placeholder="1"
+            min={0.01}
+            step={0.01}
+            required
+            disabled={submitLoading}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+
+        {/* Precio unitario */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Precio Unitario <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            value={precioUnitario}
+            onChange={(e) => setPrecioUnitario(e.target.value)}
+            placeholder="0.00"
+            min={0.01}
+            step={0.01}
+            required
+            disabled={submitLoading}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+
+        {/* Subtotal */}
+        {cantidadNum > 0 && precioUnitarioNum > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-gray-600">Gasto Total:</p>
+            <p className="text-xl font-bold text-blue-600">
+              ${subtotal.toFixed(2)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {cantidadNum} × ${precioUnitarioNum.toFixed(2)}
+            </p>
+          </div>
+        )}
+
+        {/* Botones */}
+        <div className="flex gap-2 pt-4 border-t">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={submitLoading}
+            className="flex-1"
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            disabled={
+              submitLoading || cantidadNum <= 0 || precioUnitarioNum <= 0
+            }
+            loading={submitLoading}
+            className="flex-1"
+          >
+            Guardar Compra
+          </Button>
+        </div>
+      </form>
     </>
   );
 };

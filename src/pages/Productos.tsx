@@ -4,7 +4,7 @@ import { Alert } from "../components/common/Alert";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { ProductosList } from "../components/productos/ProductosList";
 import { ProductoModal } from "../components/productos/ProductoModal";
-import { ProductoDetallesModal } from "../components/productos/ProductoDetallesModal";
+import { ProductoDetalleModal } from "../components/productos/ProductoDetalleModal";
 import { useProductos } from "../hooks/useProductos";
 import { useInsumos } from "../hooks/useInsumos";
 import { useCategorias } from "../hooks/useCategorias";
@@ -12,7 +12,7 @@ import { unidadMedidaService } from "../services";
 import type { ArticuloManufacturadoResponseDTO } from "../types/productos/ArticuloManufacturadoResponseDTO";
 import type { ArticuloManufacturadoRequestDTO } from "../types/productos/ArticuloManufacturadoRequestDTO";
 import type { UnidadMedidaDTO } from "../services";
-import { RankingView } from '../components/productos/RankingView';
+import { RankingView } from "../components/productos/RankingView";
 
 export const Productos: React.FC = () => {
   const {
@@ -21,8 +21,7 @@ export const Productos: React.FC = () => {
     error,
     createProducto,
     updateProducto,
-    desactivarProducto,
-    activarProducto,
+    deleteProducto,
   } = useProductos();
 
   const { insumos } = useInsumos();
@@ -32,9 +31,13 @@ export const Productos: React.FC = () => {
   const [loadingUnidades, setLoadingUnidades] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [detallesModalOpen, setDetallesModalOpen] = useState(false);
-  const [editingProducto, setEditingProducto] = useState<ArticuloManufacturadoResponseDTO | undefined>();
-  const [viewingProducto, setViewingProducto] = useState<ArticuloManufacturadoResponseDTO | undefined>();
+  const [detalleModalOpen, setDetalleModalOpen] = useState(false);
+  const [editingProducto, setEditingProducto] = useState<
+    ArticuloManufacturadoResponseDTO | undefined
+  >();
+  const [viewingProducto, setViewingProducto] = useState<
+    ArticuloManufacturadoResponseDTO | undefined
+  >();
   const [operationLoading, setOperationLoading] = useState(false);
   const [alert, setAlert] = useState<{
     type: "success" | "error" | "warning";
@@ -46,14 +49,18 @@ export const Productos: React.FC = () => {
   const [categoriaInput, setCategoriaInput] = useState<number | "all">("all");
   const [precioMinInput, setPrecioMinInput] = useState<number | "">("");
   const [precioMaxInput, setPrecioMaxInput] = useState<number | "">("");
-  const [estadoInput, setEstadoInput] = useState<"all" | "activos" | "eliminados">("all");
+  const [estadoInput, setEstadoInput] = useState<
+    "all" | "activos" | "eliminados"
+  >("activos"); // Por defecto mostrar activos
 
   // Filtros aplicados
   const [search, setSearch] = useState("");
   const [categoriaSel, setCategoriaSel] = useState<number | "all">("all");
   const [precioMin, setPrecioMin] = useState<number | "">("");
   const [precioMax, setPrecioMax] = useState<number | "">("");
-  const [estadoSel, setEstadoSel] = useState<"all" | "activos" | "eliminados">("all");
+  const [estadoSel, setEstadoSel] = useState<"all" | "activos" | "eliminados">(
+    "activos"
+  );
 
   useEffect(() => {
     const fetchUnidadesMedida = async () => {
@@ -97,7 +104,7 @@ export const Productos: React.FC = () => {
 
   const handleViewDetails = (producto: ArticuloManufacturadoResponseDTO) => {
     setViewingProducto(producto);
-    setDetallesModalOpen(true);
+    setDetalleModalOpen(true);
   };
 
   const handleEditFromDetails = (
@@ -105,6 +112,7 @@ export const Productos: React.FC = () => {
   ) => {
     setViewingProducto(undefined);
     setEditingProducto(producto);
+    setDetalleModalOpen(false);
     setModalOpen(true);
   };
 
@@ -121,11 +129,42 @@ export const Productos: React.FC = () => {
         await createProducto(data);
         setAlert({ type: "success", message: "Producto creado correctamente" });
       }
+      setModalOpen(false);
+      setEditingProducto(undefined);
     } catch (error) {
       setAlert({
         type: "error",
         message:
-          error instanceof Error ? error.message : "Error al guardar el producto",
+          error instanceof Error
+            ? error.message
+            : "Error al guardar el producto",
+      });
+    } finally {
+      setOperationLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (
+      !window.confirm("¿Estás seguro de que deseas desactivar este producto?")
+    ) {
+      return;
+    }
+
+    setOperationLoading(true);
+    try {
+      await deleteProducto(id);
+      setAlert({
+        type: "success",
+        message: "Producto desactivado correctamente",
+      });
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Error al desactivar el producto",
       });
     } finally {
       setOperationLoading(false);
@@ -134,12 +173,18 @@ export const Productos: React.FC = () => {
 
   const applyFilters = () => {
     return productos
-      .filter((p) => p.denominacion.toLowerCase().includes(search.toLowerCase()))
       .filter((p) =>
-        categoriaSel === "all" ? true : p.categoria.idCategoria === categoriaSel
+        p.denominacion.toLowerCase().includes(search.toLowerCase())
       )
-      .filter((p) => (precioMin === "" ? true : p.precioVenta >= Number(precioMin)))
-      .filter((p) => (precioMax === "" ? true : p.precioVenta <= Number(precioMax)))
+      .filter((p) =>
+        categoriaSel === "all" ? true : p.idCategoria === categoriaSel
+      )
+      .filter((p) =>
+        precioMin === "" ? true : p.precioVenta >= Number(precioMin)
+      )
+      .filter((p) =>
+        precioMax === "" ? true : p.precioVenta <= Number(precioMax)
+      )
       .filter((p) =>
         estadoSel === "all"
           ? true
@@ -152,7 +197,7 @@ export const Productos: React.FC = () => {
   const productosFiltrados = applyFilters();
 
   const categoriasConProductos = [
-    ...new Set(productosFiltrados.map((p) => p.categoria.idCategoria)),
+    ...new Set(productosFiltrados.map((p) => p.idCategoria)),
   ];
   const categoriasFiltradas = categorias.filter((cat) =>
     categoriasConProductos.includes(cat.idCategoria)
@@ -176,9 +221,9 @@ export const Productos: React.FC = () => {
     );
   }
 
- return (
+  return (
     <div className="p-4 md:p-8 space-y-6">
-      {/* --- ENCABEZADO Y PESTAÑAS (de la rama 'ramaPedro') --- */}
+      {/* ENCABEZADO Y PESTAÑAS */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Productos</h1>
@@ -186,34 +231,45 @@ export const Productos: React.FC = () => {
             Administre los productos manufacturados o vea el ranking de ventas.
           </p>
         </div>
-        {/* El botón de "Nuevo Producto" solo aparece en la vista de productos */}
-        {!isRankingView && <Button onClick={handleCreate}>Nuevo Producto</Button>}
+        {!isRankingView && (
+          <Button onClick={handleCreate}>Nuevo Producto</Button>
+        )}
       </div>
 
       <div className="flex border-b">
         <button
-          className={`py-2 px-4 text-lg ${!isRankingView ? 'border-b-2 border-purple-600 font-semibold text-gray-800' : 'text-gray-500'}`}
+          className={`py-2 px-4 text-lg ${
+            !isRankingView
+              ? "border-b-2 border-purple-600 font-semibold text-gray-800"
+              : "text-gray-500"
+          }`}
           onClick={() => setIsRankingView(false)}
         >
           Mis Productos
         </button>
         <button
-          className={`py-2 px-4 text-lg ${isRankingView ? 'border-b-2 border-purple-600 font-semibold text-gray-800' : 'text-gray-500'}`}
+          className={`py-2 px-4 text-lg ${
+            isRankingView
+              ? "border-b-2 border-purple-600 font-semibold text-gray-800"
+              : "text-gray-500"
+          }`}
           onClick={() => setIsRankingView(true)}
         >
           Ranking de Ventas
         </button>
       </div>
 
-      {/* --- RENDERIZADO CONDICIONAL DE LA VISTA --- */}
+      {/* RENDERIZADO CONDICIONAL */}
       {isRankingView ? (
-        // VISTA RANKING: Aquí irá tu componente de ranking.
         <RankingView />
       ) : (
-        // VISTA GESTIÓN DE PRODUCTOS: Mantiene toda tu lógica existente.
         <div className="space-y-6">
           {alert && (
-            <Alert type={alert.type} message={alert.message} onClose={() => setAlert(null)} />
+            <Alert
+              type={alert.type}
+              message={alert.message}
+              onClose={() => setAlert(null)}
+            />
           )}
           {error && (
             <Alert type="error" title="Error al cargar datos" message={error} />
@@ -226,6 +282,7 @@ export const Productos: React.FC = () => {
             />
           )}
 
+          {/* FORMULARIO DE BÚSQUEDA Y FILTROS */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -233,7 +290,7 @@ export const Productos: React.FC = () => {
               setCategoriaSel(categoriaInput);
               setPrecioMin(precioMinInput);
               setPrecioMax(precioMaxInput);
-              setEstadoSel(estadoInput); 
+              setEstadoSel(estadoInput);
             }}
             className="bg-white p-4 rounded-lg shadow grid grid-cols-1 md:grid-cols-6 gap-4 items-end"
           >
@@ -247,7 +304,9 @@ export const Productos: React.FC = () => {
             <select
               value={categoriaInput}
               onChange={(e) =>
-                setCategoriaInput(e.target.value === "all" ? "all" : Number(e.target.value))
+                setCategoriaInput(
+                  e.target.value === "all" ? "all" : Number(e.target.value)
+                )
               }
               className="w-full border px-3 py-2 rounded-lg"
             >
@@ -263,7 +322,9 @@ export const Productos: React.FC = () => {
               placeholder="Precio mín."
               value={precioMinInput}
               onChange={(e) =>
-                setPrecioMinInput(e.target.value === "" ? "" : Number(e.target.value))
+                setPrecioMinInput(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
               }
               className="w-full border px-3 py-2 rounded-lg"
             />
@@ -272,13 +333,19 @@ export const Productos: React.FC = () => {
               placeholder="Precio máx."
               value={precioMaxInput}
               onChange={(e) =>
-                setPrecioMaxInput(e.target.value === "" ? "" : Number(e.target.value))
+                setPrecioMaxInput(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
               }
               className="w-full border px-3 py-2 rounded-lg"
             />
             <select
               value={estadoInput}
-              onChange={e => setEstadoInput(e.target.value as "all" | "activos" | "eliminados")}
+              onChange={(e) =>
+                setEstadoInput(
+                  e.target.value as "all" | "activos" | "eliminados"
+                )
+              }
               className="w-full border px-3 py-2 rounded-lg"
             >
               <option value="all">Activos/Eliminados</option>
@@ -294,21 +361,30 @@ export const Productos: React.FC = () => {
             </button>
           </form>
 
+          {/* ESTADÍSTICAS */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {stats.total}
+              </div>
               <div className="text-sm text-gray-600">Total Productos</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-green-600">{stats.disponibles}</div>
+              <div className="text-2xl font-bold text-green-600">
+                {stats.disponibles}
+              </div>
               <div className="text-sm text-gray-600">Stock Disponible</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-red-600">{stats.sinStock}</div>
+              <div className="text-2xl font-bold text-red-600">
+                {stats.sinStock}
+              </div>
               <div className="text-sm text-gray-600">Sin Stock</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-purple-600">{stats.margenAlto}</div>
+              <div className="text-2xl font-bold text-purple-600">
+                {stats.margenAlto}
+              </div>
               <div className="text-sm text-gray-600">Margen Alto (3x+)</div>
             </div>
           </div>
@@ -321,15 +397,16 @@ export const Productos: React.FC = () => {
             />
           )}
 
+          {/* LISTA DE PRODUCTOS */}
           <ProductosList
             productos={productosFiltrados}
             loading={loading}
             onEdit={handleEdit}
-            desactivarProducto={desactivarProducto}
-            activarProducto={activarProducto}
+            onDelete={handleDelete}
             onViewDetails={handleViewDetails}
           />
 
+          {/* MODAL DE EDICIÓN/CREACIÓN */}
           <ProductoModal
             isOpen={modalOpen}
             onClose={() => {
@@ -344,17 +421,18 @@ export const Productos: React.FC = () => {
             loading={operationLoading}
           />
 
-          <ProductoDetallesModal
-            isOpen={detallesModalOpen}
+          {/* MODAL DE DETALLES (ahora usa ProductoDetalleModal unificado) */}
+          <ProductoDetalleModal
+            isOpen={detalleModalOpen}
             onClose={() => {
-              setDetallesModalOpen(false);
+              setDetalleModalOpen(false);
               setViewingProducto(undefined);
             }}
             producto={viewingProducto}
-            onEdit={handleEditFromDetails}
+            onAgregarCarrito={handleEditFromDetails}
           />
         </div>
       )}
     </div>
-  )
-}
+  );
+};

@@ -4,6 +4,7 @@ import type { CategoriaResponseDTO } from "../../types/categorias/CategoriaRespo
 import { FormField } from "../common/FormFieldProps";
 import { Button } from "../common/Button";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import type { TipoCategoria } from "../../types/categorias/TipoCategoria";
 
 interface CategoriaFormProps {
   categoria?: CategoriaResponseDTO;
@@ -12,8 +13,6 @@ interface CategoriaFormProps {
   onCancel: () => void;
   loading?: boolean;
 }
-
-const MAX_JERARQUIA_NIVELES = 2;
 
 export const CategoriaForm: React.FC<CategoriaFormProps> = ({
   categoria,
@@ -25,6 +24,7 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
   const [formData, setFormData] = useState<CategoriaRequestDTO>({
     denominacion: "",
     esSubcategoria: false,
+    tipoCategoria: "COMIDAS", // por defecto
     idCategoriaPadre: undefined,
   });
 
@@ -37,6 +37,7 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
       setFormData({
         denominacion: categoria.denominacion,
         esSubcategoria: categoria.esSubcategoria,
+        tipoCategoria: categoria.tipoCategoria,
         idCategoriaPadre: categoria.idCategoriaPadre,
       });
     }
@@ -49,22 +50,22 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
     }
   }, [formData.esSubcategoria]);
 
-  // Filtrar categorías padre disponibles
+  //  Filtrar categorías padre por tipo
   const categoriasDisponibles = React.useMemo(() => {
-    if (!formData.esSubcategoria) {
-      return [];
-    }
-
+    if (!formData.esSubcategoria) return [];
     return categoriasPadre.filter((cat) => {
-      // No puede ser la misma categoría
       if (cat.idCategoria === categoria?.idCategoria) return false;
-
-      // Solo categorías principales pueden ser padres (nivel 0)
       if (cat.esSubcategoria) return false;
-
+      // Solo categorías del mismo tipo (COMIDAS / INGREDIENTES / BEBIDAS)
+      if (cat.tipoCategoria !== formData.tipoCategoria) return false;
       return true;
     });
-  }, [categoriasPadre, formData.esSubcategoria, categoria]);
+  }, [
+    categoriasPadre,
+    formData.esSubcategoria,
+    formData.tipoCategoria,
+    categoria,
+  ]);
 
   // Organizar categorías
   const categoriasOrganizadas = React.useMemo(() => {
@@ -80,7 +81,7 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
         .includes(busquedaCategoria.toLowerCase().trim());
     });
 
-    // Solo ordenar por nombre
+    // Ordenar por nombre
     return categoriasFiltradas.sort((a, b) =>
       a.denominacion.localeCompare(b.denominacion)
     );
@@ -164,15 +165,68 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
         error={errors.denominacion}
       />
 
+      {/*  Selector de tipo */}
       <div className="space-y-3">
         <label className="block text-sm font-medium text-gray-700">
-          Tipo de Categoría
+          Tipo de Categoría *
+        </label>
+        <div className="grid grid-cols-3 gap-4">
+          {(
+            [
+              {
+                key: "COMIDAS",
+                title: "🍕 Comidas",
+                desc: "Para productos manufacturados",
+              },
+              {
+                key: "INGREDIENTES",
+                title: "🥕 Ingredientes",
+                desc: "Para artículos insumo",
+              },
+              { key: "BEBIDAS", title: "🥤 Bebidas", desc: "Para bebidas" },
+            ] as { key: TipoCategoria; title: string; desc: string }[]
+          ).map((opt) => (
+            <label
+              key={opt.key}
+              className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                formData.tipoCategoria === opt.key
+                  ? "border-orange-500 bg-orange-50"
+                  : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+              }`}
+            >
+              <input
+                type="radio"
+                name="tipoCategoria"
+                checked={formData.tipoCategoria === opt.key}
+                onChange={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    tipoCategoria: opt.key,
+                    idCategoriaPadre: undefined,
+                  }))
+                }
+                className="mr-3 text-orange-600"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">{opt.title}</div>
+                <div className="text-sm text-gray-500">{opt.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Nivel de Categoría */}
+      <div className="space-y-3">
+        <label className="block text-sm font-medium text-gray-700">
+          Nivel de Categoría *
         </label>
         <div className="grid grid-cols-2 gap-4">
+          {/* Principal */}
           <label
             className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
               !formData.esSubcategoria
-                ? "border-orange-500 bg-orange-50"
+                ? "border-blue-500 bg-blue-50"
                 : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
             }`}
           >
@@ -181,21 +235,26 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
               name="esSubcategoria"
               checked={!formData.esSubcategoria}
               onChange={() => handleEsSubcategoriaChange(false)}
-              className="mr-3 text-orange-600"
+              className="mr-3 text-blue-600"
             />
             <div className="flex-1">
               <div className="font-medium text-gray-900">
                 Categoría Principal
               </div>
               <div className="text-sm text-gray-500">
-                Ej: Harinas, Carnes, Lácteos
+                {formData.tipoCategoria === "INGREDIENTES"
+                  ? "Ej: Harinas, Carnes"
+                  : formData.tipoCategoria === "BEBIDAS"
+                  ? "Ej: Refrescantes, Alcohólicas"
+                  : "Ej: Pizzas, Pastas"}
               </div>
             </div>
           </label>
+          {/* Subcategoría */}
           <label
             className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
               formData.esSubcategoria
-                ? "border-orange-500 bg-orange-50"
+                ? "border-blue-500 bg-blue-50"
                 : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
             }`}
           >
@@ -204,12 +263,16 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
               name="esSubcategoria"
               checked={formData.esSubcategoria}
               onChange={() => handleEsSubcategoriaChange(true)}
-              className="mr-3 text-orange-600"
+              className="mr-3 text-blue-600"
             />
             <div className="flex-1">
               <div className="font-medium text-gray-900">Subcategoría</div>
               <div className="text-sm text-gray-500">
-                Ej: Trigo, Vacuna, Quesos
+                {formData.tipoCategoria === "INGREDIENTES"
+                  ? "Ej: Trigo, Vacuna"
+                  : formData.tipoCategoria === "BEBIDAS"
+                  ? "Ej: Con gas, Sin alcohol"
+                  : "Ej: Con champiñones, BBQ"}
               </div>
             </div>
           </label>
@@ -234,7 +297,12 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
                   cual se organizará esta subcategoría.
                 </div>
                 <div className="mt-2 text-blue-600">
-                  <strong>Ejemplo:</strong> Harinas → Integral, Común, Especial
+                  <strong>Ejemplo:</strong>{" "}
+                  {formData.tipoCategoria === "INGREDIENTES"
+                    ? "Harinas → Integral, Común, Especial"
+                    : formData.tipoCategoria === "BEBIDAS"
+                    ? "Refrescantes → Con gas, Sin azúcar"
+                    : "Pizzas → Clásica, Especial, Vegana"}
                 </div>
               </div>
             </div>
@@ -301,13 +369,19 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
                     {busquedaCategoria.trim()
                       ? `No se encontraron categorías con "${busquedaCategoria}"`
                       : categoriasDisponibles.length === 0
-                      ? "Debe crear al menos una categoría principal primero"
+                      ? `Debe crear al menos una categoría principal de ${
+                          formData.tipoCategoria === "INGREDIENTES"
+                            ? "ingredientes"
+                            : formData.tipoCategoria === "BEBIDAS"
+                            ? "bebidas"
+                            : "comidas"
+                        } primero`
                       : `${categoriasDisponibles.length} categorías disponibles`}
                   </div>
                 </div>
               ) : (
                 <div>
-                  {/* Encabezado si hay muchas categorías */}
+                  {/* Encabezado */}
                   {categoriasOrganizadas.length > 8 &&
                     !busquedaCategoria.trim() && (
                       <div className="p-3 bg-gray-50 border-b border-gray-200 text-sm text-gray-600 flex items-center space-x-2">
@@ -319,7 +393,7 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
                     )}
 
                   <div className="divide-y divide-gray-100">
-                    {categoriasOrganizadas.map((cat, index) => (
+                    {categoriasOrganizadas.map((cat) => (
                       <div
                         key={cat.idCategoria}
                         className={`p-4 cursor-pointer transition-all duration-200 hover:bg-orange-50 ${
@@ -330,14 +404,14 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
                         onClick={() => handleSelectCategoria(cat.idCategoria)}
                       >
                         <div className="flex items-center space-x-3">
-                          {/* Icono de categoría principal */}
+                          {/* Icono */}
                           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                             <span className="text-blue-600 font-bold text-sm">
                               {cat.denominacion.charAt(0).toUpperCase()}
                             </span>
                           </div>
 
-                          {/* Información de la categoría */}
+                          {/* Información */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <div>
@@ -371,7 +445,7 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
                             </div>
                           </div>
 
-                          {/* Indicador de selección */}
+                          {/* Indicador */}
                           {cat.idCategoria === formData.idCategoriaPadre && (
                             <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
                               <span className="text-white text-sm">✓</span>
@@ -385,20 +459,14 @@ export const CategoriaForm: React.FC<CategoriaFormProps> = ({
               )}
             </div>
 
-            {/* Footer - SIMPLIFICADO */}
+            {/* Footer */}
             {categoriasOrganizadas.length > 0 && (
               <div className="border-t border-gray-200 bg-gray-50 p-3">
                 <div className="flex justify-between items-center text-xs text-gray-600">
-                  <div className="flex items-center space-x-4">
-                    <span>
-                      {categoriasOrganizadas.length} de{" "}
-                      {categoriasDisponibles.length} categorías
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span>Solo categorías principales</span>
-                    </span>
-                  </div>
+                  <span>
+                    {categoriasOrganizadas.length} de{" "}
+                    {categoriasDisponibles.length} categorías
+                  </span>
                   <span className="font-medium">Sistema de 2 niveles</span>
                 </div>
               </div>

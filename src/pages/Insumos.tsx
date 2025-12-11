@@ -10,7 +10,6 @@ import { unidadMedidaService } from "../services";
 import type { ArticuloInsumoResponseDTO } from "../types/insumos/ArticuloInsumoResponseDTO";
 import type { ArticuloInsumoRequestDTO } from "../types/insumos/ArticuloInsumoRequestDTO";
 import type { UnidadMedidaDTO } from "../services";
-import HistoricoPrecioService from "../services/HistoricoPrecioService";
 
 export const Insumos: React.FC = () => {
   const {
@@ -25,19 +24,21 @@ export const Insumos: React.FC = () => {
 
   const { categorias } = useCategorias();
 
-  // Estado para unidades de medida
+  // ==================== ESTADO ====================
+
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [loadingUnidades, setLoadingUnidades] = useState(false);
-
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInsumo, setEditingInsumo] = useState<
     ArticuloInsumoResponseDTO | undefined
   >();
   const [operationLoading, setOperationLoading] = useState(false);
   const [alert, setAlert] = useState<{
-    type: "success" | "error";
+    type: "success" | "error" | "warning";
     message: string;
   } | null>(null);
+
+  // ==================== EFECTOS ====================
 
   // Cargar unidades de medida
   useEffect(() => {
@@ -47,7 +48,6 @@ export const Insumos: React.FC = () => {
         const unidades = await unidadMedidaService.getAll();
         setUnidadesMedida(unidades);
       } catch (error) {
-        console.error("Error al cargar unidades de medida:", error);
         setAlert({
           type: "error",
           message: "Error al cargar unidades de medida",
@@ -59,6 +59,8 @@ export const Insumos: React.FC = () => {
 
     fetchUnidadesMedida();
   }, []);
+
+  // ==================== MANEJADORES ====================
 
   const handleCreate = () => {
     setEditingInsumo(undefined);
@@ -86,6 +88,8 @@ export const Insumos: React.FC = () => {
           message: "Ingrediente creado correctamente",
         });
       }
+      await refresh(); // asegura refresco tras submit
+      closeModal();
     } catch (error) {
       setAlert({
         type: "error",
@@ -103,30 +107,17 @@ export const Insumos: React.FC = () => {
     const insumo = insumos.find((i) => i.idArticulo === id);
     const nombreInsumo = insumo?.denominacion || "el insumo";
 
-    // ✅ Verificar si tiene compras registradas
-    let tieneCompras = false;
-    let mensajeAdvertencia = "";
+    // ✅ Verificar si está en uso
+    const enUso = (insumo?.cantidadProductosQueLoUsan ?? 0) > 0;
 
-    try {
-      const stats = await HistoricoPrecioService.getEstadisticas(id);
-      if (stats && stats.totalRegistros > 0) {
-        tieneCompras = true;
-        mensajeAdvertencia =
-          `\n\n⚠️ ADVERTENCIA: Este insumo tiene ${stats.totalRegistros} compra(s) registrada(s).\n` +
-          `Precio Promedio: $${stats.precioPromedio.toFixed(2)}\n` +
-          `Rango: $${stats.precioMinimo.toFixed(
-            2
-          )} - $${stats.precioMaximo.toFixed(2)}`;
-      }
-    } catch (error) {
-      console.error("Error obteniendo estadísticas:", error);
+    let mensajeAdvertencia = "";
+    if (enUso) {
+      mensajeAdvertencia = `\n\n⚠️ ADVERTENCIA: Este insumo se usa en ${insumo?.cantidadProductosQueLoUsan} producto(s).`;
     }
 
-    // ✅ Mensaje de confirmación
     const mensaje =
       `¿Está seguro de que desea eliminar "${nombreInsumo}"?` +
-      mensajeAdvertencia +
-      (tieneCompras ? "\n\nEsta acción no se puede deshacer." : "");
+      mensajeAdvertencia;
 
     if (!window.confirm(mensaje)) {
       return;
@@ -134,42 +125,17 @@ export const Insumos: React.FC = () => {
 
     try {
       await deleteInsumo(id);
-
       setAlert({
         type: "success",
-        message: `"${nombreInsumo}" eliminado correctamente${
-          tieneCompras ? " (incluida su compras)" : ""
-        }`,
+        message: `"${nombreInsumo}" eliminado correctamente`,
       });
     } catch (error) {
       const errorMsg =
-        error instanceof Error
-          ? error.message
-          : "Error al eliminar el ingrediente";
-
-      console.error("❌ Error eliminando insumo:", error);
-
-      // ✅ Detectar si es por compras asociadas
-      if (
-        errorMsg.includes("compra") ||
-        errorMsg.includes("COMPRAS") ||
-        errorMsg.includes("compra")
-      ) {
-        setAlert({
-          type: "error",
-          message:
-            `No se puede eliminar "${nombreInsumo}" porque tiene compras registradas.\n\n` +
-            `Opciones:\n` +
-            `1. Eliminar manualmente las compras (historial)\n` +
-            `2. Contactar al administrador\n\n` +
-            `Detalle: ${errorMsg}`,
-        });
-      } else {
-        setAlert({
-          type: "error",
-          message: errorMsg,
-        });
-      }
+        error instanceof Error ? error.message : "Error al eliminar";
+      setAlert({
+        type: "error",
+        message: errorMsg,
+      });
     }
   };
 
@@ -178,20 +144,17 @@ export const Insumos: React.FC = () => {
     setEditingInsumo(undefined);
   };
 
-  const closeAlert = () => {
-    setAlert(null);
-  };
+  // ==================== ESTADÍSTICAS ====================
 
-  // Calcular estadísticas
   const stats = {
     total: insumos.length,
     paraElaborar: insumos.filter((i) => i.esParaElaborar).length,
-    stockBajo: insumos.filter(
-      (i) => i.estadoStock === "BAJO" || i.estadoStock === "CRITICO"
-    ).length,
+    stockBajo: insumos.filter((i) => ["BAJO"].includes(i.estadoStock)).length,
     stockCritico: insumos.filter((i) => i.estadoStock === "CRITICO").length,
     ventaDirecta: insumos.filter((i) => !i.esParaElaborar).length,
   };
+
+  // ==================== RENDER ====================
 
   if (loading || loadingUnidades) {
     return (
@@ -216,69 +179,59 @@ export const Insumos: React.FC = () => {
             Administre los insumos, stock y precios
           </p>
         </div>
-        <Button onClick={handleCreate}>Nuevo Ingrediente</Button>
+        <Button onClick={handleCreate}>+ Nuevo Ingrediente</Button>
       </div>
 
-      {/* Alert */}
+      {/* Alerts */}
       {alert && (
-        <Alert type={alert.type} message={alert.message} onClose={closeAlert} />
+        <Alert
+          type={alert.type}
+          message={alert.message}
+          onClose={() => setAlert(null)}
+        />
       )}
 
-      {/* Error */}
       {error && (
-        <Alert type="error" title="Error al cargar datos" message={error} />
+        <Alert type="error" message={error} onClose={() => setAlert(null)} />
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-          <div className="text-sm text-gray-600">Total Ingredientes</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-purple-600">
-            {stats.paraElaborar}
-          </div>
-          <div className="text-sm text-gray-600">Para Elaborar</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-yellow-600">
-            {stats.stockBajo}
-          </div>
-          <div className="text-sm text-gray-600">Stock Bajo</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-red-600">
-            {stats.stockCritico}
-          </div>
-          <div className="text-sm text-gray-600">Stock Crítico</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-pink-600">
-            {stats.ventaDirecta}
-          </div>
-          <div className="text-sm text-gray-600">Venta Directa</div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <StatCard label="Total Ingredientes" value={stats.total} color="blue" />
+        <StatCard
+          label="Para Elaborar"
+          value={stats.paraElaborar}
+          color="purple"
+        />
+        <StatCard label="Stock Bajo" value={stats.stockBajo} color="yellow" />
+        <StatCard
+          label="Stock Crítico"
+          value={stats.stockCritico}
+          color="red"
+        />
+        <StatCard
+          label="Venta Directa"
+          value={stats.ventaDirecta}
+          color="pink"
+        />
       </div>
 
       {/* Alertas de Stock */}
       {stats.stockCritico > 0 && (
         <Alert
           type="error"
-          title="¡Atención! Stock Crítico"
-          message={`Hay ${stats.stockCritico} ingrediente(s) con stock crítico que requieren reposición urgente.`}
+          message={`⚠️ Hay ${stats.stockCritico} ingrediente(s) con stock crítico que requieren reposición urgente.`}
         />
       )}
 
       {stats.stockBajo > 0 && stats.stockCritico === 0 && (
         <Alert
           type="warning"
-          title="Stock Bajo"
-          message={`Hay ${stats.stockBajo} ingrediente(s) con stock bajo. Considere realizar pedidos pronto.`}
+          message={`📦 Hay ${stats.stockBajo} ingrediente(s) con stock bajo. Considere realizar pedidos pronto.`}
         />
       )}
 
-      {/* Table */}
+      {/* Tabla */}
       <InsumosList
         insumos={insumos}
         loading={loading}
@@ -287,7 +240,7 @@ export const Insumos: React.FC = () => {
         onRefresh={refresh}
       />
 
-      {/* Modal de Insumo */}
+      {/* Modal */}
       <InsumoModal
         isOpen={modalOpen}
         onClose={closeModal}
@@ -297,6 +250,31 @@ export const Insumos: React.FC = () => {
         onSubmit={handleSubmit}
         loading={operationLoading}
       />
+    </div>
+  );
+};
+
+// ==================== COMPONENTE AUXILIAR ====================
+
+interface StatCardProps {
+  label: string;
+  value: number;
+  color: "blue" | "purple" | "yellow" | "red" | "pink";
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
+  const colorMap = {
+    blue: "text-blue-600 bg-blue-50",
+    purple: "text-purple-600 bg-purple-50",
+    yellow: "text-yellow-600 bg-yellow-50",
+    red: "text-red-600 bg-red-50",
+    pink: "text-pink-600 bg-pink-50",
+  };
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+      <div className={`text-3xl font-bold ${colorMap[color]}`}>{value}</div>
+      <div className="text-sm text-gray-600 mt-2">{label}</div>
     </div>
   );
 };

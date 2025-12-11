@@ -45,7 +45,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
     precioVenta: 0,
     margenGanancia: 2.5,
     detalles: [],
-    imagen: undefined,
+    imagenes: [],
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -61,17 +61,14 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
       setFormData({
         denominacion: producto.denominacion,
         idUnidadMedida: producto.idUnidadMedida,
-        idCategoria: producto.categoria.idCategoria,
+        idCategoria: producto.idCategoria,
         descripcion: producto.descripcion || "",
         tiempoEstimadoEnMinutos: producto.tiempoEstimadoEnMinutos,
         preparacion: producto.preparacion || "",
         precioVenta: producto.precioVenta,
         margenGanancia: producto.margenGanancia || 2.5,
         detalles: producto.detalles || [],
-        imagen:
-          producto.imagenes && producto.imagenes.length > 0
-            ? producto.imagenes[0]
-            : undefined,
+        imagenes: producto.imagenes || [],
       });
       setUsarMargenAutomatico(false);
     }
@@ -79,15 +76,22 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
 
   // Calcular precio automático cuando cambian ingredientes o margen
   useEffect(() => {
-    if (usarMargenAutomatico) {
-      const costoTotal = formData.detalles.reduce(
-        (total, detalle) => total + (detalle.subtotal || 0),
-        0
-      );
+    if (usarMargenAutomatico && formData.detalles.length > 0) {
+      const costoTotal = formData.detalles.reduce((total, detalle) => {
+        const insumo = ingredientes.find(
+          (ing) => ing.idArticulo === detalle.idArticuloInsumo
+        );
+        return total + (insumo ? detalle.cantidad * insumo.precioCompra : 0);
+      }, 0);
       const precioCalculado = costoTotal * formData.margenGanancia;
       setFormData((prev) => ({ ...prev, precioVenta: precioCalculado }));
     }
-  }, [formData.detalles, formData.margenGanancia, usarMargenAutomatico]);
+  }, [
+    formData.detalles,
+    formData.margenGanancia,
+    usarMargenAutomatico,
+    ingredientes,
+  ]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -121,6 +125,11 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
       newErrors.margenGanancia = "El margen debe ser mayor a 1 (100%)";
     }
 
+    if (!formData.preparacion.trim()) {
+      newErrors.preparacion =
+        "Las instrucciones de preparación son obligatorias";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -131,12 +140,13 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
     if (!validateForm()) return;
 
     try {
-      // Preparar datos sin imagen para el backend
-      const dataWithoutImage = { ...formData };
-      delete dataWithoutImage.imagen;
+      // Preparar datos sin imágenes para el backend
+      // Las imágenes se suben por separado a través de ProductoService.uploadImagenes
+      const dataWithoutImages = { ...formData };
+      delete (dataWithoutImages as any).imagenes;
 
       // Crear/actualizar producto
-      await onSubmit(dataWithoutImage);
+      await onSubmit(dataWithoutImages as ArticuloManufacturadoRequestDTO);
 
       setAlert({
         type: "success",
@@ -158,7 +168,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
             precioVenta: 0,
             margenGanancia: 2.5,
             detalles: [],
-            imagen: undefined,
+            imagenes: [],
           });
         }, 1000);
       }
@@ -180,16 +190,24 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleImageChange = (imagen: ImagenDTO | null) => {
-    updateField("imagen", imagen ?? undefined);
-    if (errors.imagen) {
-      setErrors((prev) => ({ ...prev, imagen: "" }));
+  const handleImageChange = (imagenes: ImagenDTO[]) => {
+    updateField("imagenes", imagenes);
+    if (errors.imagenes) {
+      setErrors((prev) => ({ ...prev, imagenes: "" }));
     }
   };
 
-  const costoTotal = formData.detalles.reduce(
-    (total, detalle) => total + (detalle.subtotal || 0),
-    0
+  // Calcular costo total de ingredientes
+  const costoTotal = formData.detalles.reduce((total, detalle) => {
+    const insumo = ingredientes.find(
+      (ing) => ing.idArticulo === detalle.idArticuloInsumo
+    );
+    return total + (insumo ? detalle.cantidad * insumo.precioCompra : 0);
+  }, 0);
+
+  // Filtrar solo categorías para comidas (no ingredientes)
+  const categoriasParaComidas = categorias.filter(
+    (cat) => !cat.esParaIngredientes && !cat.eliminado
   );
 
   return (
@@ -221,7 +239,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
             />
 
             <CategoriaSelector
-              categorias={categorias}
+              categorias={categoriasParaComidas}
               value={formData.idCategoria}
               onChange={(value) => updateField("idCategoria", value)}
               label="Categoría"
@@ -250,7 +268,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
               type="number"
               value={formData.tiempoEstimadoEnMinutos}
               onChange={(value) =>
-                updateField("tiempoEstimadoEnMinutos", value)
+                updateField("tiempoEstimadoEnMinutos", Number(value))
               }
               placeholder="30"
               min={1}
@@ -273,42 +291,64 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
           </div>
         </div>
 
-        {/* ✅ IMAGEN DEL PRODUCTO - NUEVO COMPONENTE */}
+        {/* IMAGEN DEL PRODUCTO */}
         <div className="border-b pb-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">
-            Imagen del Producto
+            Imágenes del Producto
           </h2>
 
           <div className="max-w-md">
             <ImageUpload
               entityType={IMAGE_CONFIG.ENTITY_TYPES.MANUFACTURADO}
               entityId={producto?.idArticulo}
-              currentImage={formData.imagen}
-              onImageChange={handleImageChange}
+              currentImages={formData.imagenes || []}
+              onImagesChange={handleImageChange}
               onError={(error) =>
                 setAlert({
                   type: "error",
-                  message: `Error en imagen: ${error}`,
+                  message: `Error en imágenes: ${error}`,
                 })
               }
-              label="Imagen del Producto"
+              label="Imágenes del Producto"
               disabled={loading}
+              multiple={true}
             />
 
             <p className="mt-4 text-sm text-gray-600 space-y-1">
               <span className="block">
-                🖼️ Una buena imagen ayuda a las ventas.
+                🖼️ Buenas imágenes ayudan a las ventas.
               </span>
               <span className="block">
-                Se recomienda una foto del producto terminado.
+                Se recomienda una foto clara del producto terminado.
               </span>
               {!producto && (
                 <span className="block text-blue-600 font-medium">
-                  💡 La imagen se subirá automáticamente al guardar el producto.
+                  💡 Las imágenes se subirán automáticamente al guardar el
+                  producto.
                 </span>
               )}
             </p>
           </div>
+        </div>
+
+        {/* Preparación */}
+        <div className="border-b pb-6">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">
+            Preparación
+          </h2>
+
+          <FormField
+            label="Instrucciones de Preparación"
+            name="preparacion"
+            type="textarea"
+            value={formData.preparacion || ""}
+            onChange={(value) => updateField("preparacion", value)}
+            placeholder="1. Preparar la masa...&#10;2. Agregar ingredientes...&#10;3. Cocinar por..."
+            rows={6}
+            required
+            error={errors.preparacion}
+            helperText="Instrucciones paso a paso para la cocina"
+          />
         </div>
 
         {/* Ingredientes */}
@@ -328,24 +368,6 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
           )}
         </div>
 
-        {/* Preparación */}
-        <div className="border-b pb-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
-            Preparación
-          </h2>
-
-          <FormField
-            label="Instrucciones de Preparación"
-            name="preparacion"
-            type="textarea"
-            value={formData.preparacion || ""}
-            onChange={(value) => updateField("preparacion", value)}
-            placeholder="1. Preparar la masa...&#10;2. Agregar ingredientes...&#10;3. Cocinar por..."
-            rows={6}
-            helperText="Instrucciones paso a paso para la cocina"
-          />
-        </div>
-
         {/* Precios */}
         <div className="border-b pb-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">
@@ -356,13 +378,22 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
             <div className="text-sm text-gray-600 space-y-1">
               <div>
                 Costo de Ingredientes:{" "}
-                <span className="font-medium">${costoTotal.toFixed(2)}</span>
+                <span className="font-medium text-gray-900">
+                  ${costoTotal.toFixed(2)}
+                </span>
               </div>
               {costoTotal > 0 && formData.precioVenta > 0 && (
                 <div>
                   Margen Real:{" "}
-                  <span className="font-medium">
-                    {(formData.precioVenta / costoTotal).toFixed(1)}x
+                  <span
+                    className={`font-medium ${
+                      formData.precioVenta / costoTotal >=
+                      formData.margenGanancia
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {(formData.precioVenta / costoTotal).toFixed(2)}x
                   </span>
                 </div>
               )}
@@ -377,10 +408,12 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
                   name="tipoPrecio"
                   checked={usarMargenAutomatico}
                   onChange={() => setUsarMargenAutomatico(true)}
-                  className="mr-2"
+                  className="mr-2 cursor-pointer"
                   disabled={loading}
                 />
-                Calcular precio automáticamente con margen
+                <span className="cursor-pointer">
+                  Calcular precio automáticamente con margen
+                </span>
               </label>
               <label className="flex items-center">
                 <input
@@ -388,10 +421,12 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
                   name="tipoPrecio"
                   checked={!usarMargenAutomatico}
                   onChange={() => setUsarMargenAutomatico(false)}
-                  className="mr-2"
+                  className="mr-2 cursor-pointer"
                   disabled={loading}
                 />
-                Establecer precio manualmente
+                <span className="cursor-pointer">
+                  Establecer precio manualmente
+                </span>
               </label>
             </div>
 
@@ -402,14 +437,16 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
                   name="margenGanancia"
                   type="number"
                   value={formData.margenGanancia}
-                  onChange={(value) => updateField("margenGanancia", value)}
+                  onChange={(value) =>
+                    updateField("margenGanancia", Number(value))
+                  }
                   placeholder="2.5"
-                  min={1}
+                  min={1.1}
                   step={0.1}
                   required
                   disabled={loading}
                   error={errors.margenGanancia}
-                  helperText="2.5 = 250% sobre el costo"
+                  helperText="Ej: 2.5 = 250% sobre el costo"
                 />
               )}
 
@@ -418,9 +455,9 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
                 name="precioVenta"
                 type="number"
                 value={formData.precioVenta}
-                onChange={(value) => updateField("precioVenta", value)}
+                onChange={(value) => updateField("precioVenta", Number(value))}
                 placeholder="0.00"
-                min={0}
+                min={0.01}
                 step={0.01}
                 required
                 disabled={usarMargenAutomatico || loading}
@@ -436,7 +473,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
         </div>
 
         {/* Botones */}
-        <div className="flex justify-end space-x-3 pt-4">
+        <div className="flex justify-end space-x-3 pt-4 border-t">
           <Button
             type="button"
             variant="outline"

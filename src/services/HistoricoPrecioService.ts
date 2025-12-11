@@ -1,113 +1,63 @@
-import type { HistoricoPrecioDTO } from "../types/insumos/HistoricoPrecioDTO";
-import type { HistoricoPrecioStats } from "../types/insumos/HistoricoPrecioStats";
-import type { PrecioVentaSugeridoDTO } from "../types/insumos/PrecioVentaSugeridoDTO";
 import { apiClienteService } from "./ApiClienteService";
+import type { HistoricoPrecioDTO } from "../types/insumos/HistoricoPrecioDTO";
+import type {
+  HistoricoPrecioStatsDTO,
+  PrecioVentaSugeridoDTO,
+} from "../types/insumos/HistoricoPrecioDTO";
 
-const HistoricoPrecioService = {
-  /**
-   * ✅ Obtiene el historial de precios de un artículo
-   */
-  getHistorial: async (idArticulo: number): Promise<HistoricoPrecioDTO[]> => {
-    try {
-      return await apiClienteService.get<HistoricoPrecioDTO[]>(
-        `/historico-precios/${idArticulo}`
-      );
-    } catch (error) {
-      console.error("❌ Error obteniendo historial:", error);
-      return [];
-    }
-  },
+/**
+ * ✅ Servicio para consultar histórico de precios (auditoría)
+ * ✅ Solo lectura: generado automáticamente por backend
+ * ✅ Proporciona análisis y sugerencias de precios
+ */
+export class HistoricoPrecioService {
+  private readonly endpoint = "/historico-precios";
 
   /**
-   * ✅ Obtiene los últimos N precios
+   * Obtener histórico completo de precios de un insumo
    */
-  getUltimosPrecios: async (
-    idArticulo: number,
+  async getHistorial(idArticuloInsumo: number): Promise<HistoricoPrecioDTO[]> {
+    return apiClienteService.get<HistoricoPrecioDTO[]>(
+      `${this.endpoint}/${idArticuloInsumo}`
+    );
+  }
+
+  /**
+   * Obtener los últimos N precios
+   */
+  async getUltimosPrecios(
+    idArticuloInsumo: number,
     limit: number = 10
-  ): Promise<HistoricoPrecioDTO[]> => {
-    try {
-      return await apiClienteService.get<HistoricoPrecioDTO[]>(
-        `/historico-precios/${idArticulo}/ultimos?limit=${limit}`
-      );
-    } catch (error) {
-      console.error("❌ Error obteniendo últimos precios:", error);
-      return [];
-    }
-  },
+  ): Promise<HistoricoPrecioDTO[]> {
+    return apiClienteService.get<HistoricoPrecioDTO[]>(
+      `${this.endpoint}/${idArticuloInsumo}/ultimos?limit=${limit}`
+    );
+  }
 
   /**
-   * ✅ Obtiene estadísticas de precios
+   * Obtener estadísticas de precios
    */
-  getEstadisticas: async (
-    idArticulo: number
-  ): Promise<HistoricoPrecioStats | null> => {
-    try {
-      return await apiClienteService.get<HistoricoPrecioStats>(
-        `/historico-precios/${idArticulo}/estadisticas`
-      );
-    } catch (error) {
-      console.error("❌ Error obteniendo estadísticas:", error);
-      return null;
-    }
-  },
+  async getEstadisticas(
+    idArticuloInsumo: number
+  ): Promise<HistoricoPrecioStatsDTO> {
+    return apiClienteService.get<HistoricoPrecioStatsDTO>(
+      `${this.endpoint}/${idArticuloInsumo}/estadisticas`
+    );
+  }
 
   /**
-   * Obtiene precio SUGERIDO DE VENTA
-   * Basado en:
+   * Obtener precio de venta sugerido basado en:
    * - Precio promedio histórico de compra
    * - Margen de ganancia deseado
    */
-  getPrecioVentaSugerido: async (
-    idArticulo: number,
+  async getPrecioVentaSugerido(
+    idArticuloInsumo: number,
     margenGanancia: number = 1.2
-  ): Promise<PrecioVentaSugeridoDTO | null> => {
-    try {
-      return await apiClienteService.get(
-        `/historico-precios/${idArticulo}/precio-venta-sugerido?margenGanancia=${margenGanancia}`
-      );
-    } catch (error) {
-      console.error("❌ Error obteniendo precio de venta sugerido:", error);
-      return null;
-    }
-  },
+  ): Promise<PrecioVentaSugeridoDTO> {
+    return apiClienteService.get<PrecioVentaSugeridoDTO>(
+      `${this.endpoint}/${idArticuloInsumo}/precio-venta-sugerido?margenGanancia=${margenGanancia}`
+    );
+  }
+}
 
-  /**
-   * ✅ Registra un nuevo precio en el historial
-   */
-  registrarPrecio: async (
-    idArticulo: number,
-    precioUnitario: number,
-    cantidad?: number
-  ): Promise<HistoricoPrecioDTO | null> => {
-    try {
-      return await apiClienteService.post<HistoricoPrecioDTO>(
-        `/historico-precios`,
-        {
-          idArticulo,
-          precioUnitario,
-          cantidad: cantidad || 0,
-        }
-      );
-    } catch (error) {
-      console.error("❌ Error registrando precio:", error);
-      return null;
-    }
-  },
-
-  /**
-   * Elimina una compra individual del historial
-   */
-  deleteCompra: async (idHistoricoPrecio: number): Promise<boolean> => {
-    try {
-      await apiClienteService.deleteRequest(
-        `/historico-precios/${idHistoricoPrecio}`
-      );
-      return true;
-    } catch (error) {
-      console.error("❌ Error eliminando compra:", error);
-      return false;
-    }
-  },
-};
-
-export default HistoricoPrecioService;
+export const historicoPrecioService = new HistoricoPrecioService();

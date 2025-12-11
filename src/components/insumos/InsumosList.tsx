@@ -13,7 +13,7 @@ interface InsumosListProps {
   onRefresh: () => void;
 }
 
-const ESTADOS = ["CRITICO", "BAJO", "NORMAL", "ALTO", "SUPERADO"];
+const ESTADOS = ["CRITICO", "BAJO", "NORMAL", "ALTO"];
 
 export const InsumosList: React.FC<InsumosListProps> = ({
   insumos,
@@ -22,61 +22,44 @@ export const InsumosList: React.FC<InsumosListProps> = ({
   onDelete,
   onRefresh,
 }) => {
+  // ==================== ESTADO ====================
+
   const [compraInsumoId, setCompraInsumoId] = useState<number | null>(null);
   const [historialInsumoId, setHistorialInsumoId] = useState<number | null>(
     null
   );
-
-  // Buscador
   const [busqueda, setBusqueda] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState<string>("");
-  const [filtroUso, setFiltroUso] = useState<string>(""); // "" | "elaborar" | "venta"
-  const [filtros, setFiltros] = useState({
-    nombre: "",
-    estado: "",
-    uso: "",
-  });
+  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroUso, setFiltroUso] = useState("");
 
-  // Aplica filtros al hacer click en Buscar
-  const handleBuscar = () => {
-    setFiltros({
-      nombre: busqueda.trim().toLowerCase(),
-      estado: filtroEstado,
-      uso: filtroUso,
-    });
-  };
+  // ==================== MANEJADORES ====================
 
   const handleLimpiar = () => {
     setBusqueda("");
     setFiltroEstado("");
     setFiltroUso("");
-    setFiltros({ nombre: "", estado: "", uso: "" });
   };
 
-  const cerrarCompra = () => setCompraInsumoId(null);
-
-  // Calcula estado visual (incluye SUPERADO) SOLO para el render
-  const getEstadoVisual = (insumo: ArticuloInsumoResponseDTO) =>
-    insumo.stockActual > insumo.stockMaximo ? "SUPERADO" : insumo.estadoStock;
-
-  const getStockBadge = (insumo: ArticuloInsumoResponseDTO) => {
-    const estadoVisual = getEstadoVisual(insumo);
-
+  const getStockBadge = (estado: string | undefined | null) => {
+    if (!estado) {
+      return (
+        <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-gray-300 text-gray-800">
+          Sin estado
+        </span>
+      );
+    }
     const colors: Record<string, string> = {
-      CRITICO: "bg-red-100 text-red-800",
-      BAJO: "bg-yellow-100 text-yellow-800",
-      NORMAL: "bg-green-100 text-green-800",
-      ALTO: "bg-blue-100 text-blue-800",
-      SUPERADO: "bg-pink-100 text-pink-800",
+      CRITICO: "bg-red-100 text-red-800 border border-red-300",
+      BAJO: "bg-yellow-100 text-yellow-800 border border-yellow-300",
+      NORMAL: "bg-green-100 text-green-800 border border-green-300",
+      ALTO: "bg-blue-100 text-blue-800 border border-blue-300",
     };
-
+    const colorClass = colors[estado] || "bg-gray-100 text-gray-800";
     return (
       <span
-        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          colors[estadoVisual] || "bg-gray-100 text-gray-800"
-        }`}
+        className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${colorClass}`}
       >
-        {estadoVisual}
+        {estado}
       </span>
     );
   };
@@ -87,23 +70,24 @@ export const InsumosList: React.FC<InsumosListProps> = ({
       "https://via.placeholder.com/40x40/f3f4f6/6b7280?text=Sin+Imagen";
   };
 
-  // Filtrar insumos
+  // ==================== FILTRADOS ====================
+
   const insumosFiltrados = insumos.filter((i) => {
-    // Filtro nombre
-    const nombreOk = filtros.nombre
-      ? i.denominacion.toLowerCase().includes(filtros.nombre)
+    const nombreOk = busqueda
+      ? i.denominacion.toLowerCase().includes(busqueda.toLowerCase())
       : true;
-    // Filtro estado (usando estado visual)
-    const estadoVisual = getEstadoVisual(i);
-    const estadoOk = filtros.estado ? estadoVisual === filtros.estado : true;
-    // Filtro uso
+
+    const estadoOk = filtroEstado ? i.estadoStock === filtroEstado : true;
+
     let usoOk = true;
-    if (filtros.uso === "elaborar") usoOk = i.esParaElaborar;
-    if (filtros.uso === "venta") usoOk = !i.esParaElaborar;
+    if (filtroUso === "elaborar") usoOk = i.esParaElaborar;
+    if (filtroUso === "venta") usoOk = !i.esParaElaborar;
+
     return nombreOk && estadoOk && usoOk;
   });
 
-  // Columnas tabla
+  // ==================== COLUMNAS ====================
+
   const columns: TableColumn<ArticuloInsumoResponseDTO>[] = [
     {
       key: "imagen",
@@ -111,26 +95,16 @@ export const InsumosList: React.FC<InsumosListProps> = ({
       width: "8%",
       align: "center",
       render: (_, record) =>
-        record.esParaElaborar ? (
-          <div className="flex justify-center">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-              <span className="text-gray-400 text-xs">🧪</span>
-            </div>
-          </div>
+        record.imagenes?.[0] ? (
+          <img
+            src={record.imagenes[0].url}
+            alt={record.imagenes[0].denominacion}
+            className="w-10 h-10 object-cover rounded-lg shadow-sm"
+            onError={handleImageError}
+          />
         ) : (
-          <div className="flex justify-center">
-            {record.imagenes?.[0] ? (
-              <img
-                src={record.imagenes[0].url}
-                alt={record.imagenes[0].denominacion}
-                className="w-10 h-10 object-cover rounded-lg shadow-sm"
-                onError={handleImageError}
-              />
-            ) : (
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <span className="text-gray-400 text-xs">🛒</span>
-              </div>
-            )}
+          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+            <span className="text-gray-400 text-xs">📷</span>
           </div>
         ),
     },
@@ -142,7 +116,7 @@ export const InsumosList: React.FC<InsumosListProps> = ({
         <div>
           <p className="font-medium text-gray-900">{value}</p>
           <p className="text-xs text-gray-500">
-            {record.esParaElaborar ? "Para elaborar" : "Venta directa"}
+            {record.esParaElaborar ? "🔧 Elaborar" : "🛍️ Venta"}
           </p>
         </div>
       ),
@@ -158,33 +132,14 @@ export const InsumosList: React.FC<InsumosListProps> = ({
       width: "10%",
     },
     {
-      key: "precioCompra",
-      title: "Precio Compra",
-      width: "12%",
-      align: "right",
-      render: (value, record) => (
-        <div className="flex flex-col items-end gap-2">
-          <span className="font-semibold">${value.toFixed(2)}</span>
-          {/* ✅ NUEVO: Botón para ver historial */}
-          <button
-            onClick={() => setHistorialInsumoId(record.idArticulo)}
-            className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded transition-colors"
-            title="Ver historial de precios"
-          >
-            📊 Historial
-          </button>
-        </div>
-      ),
-    },
-    {
       key: "stockActual",
-      title: "Stock",
-      width: "10%",
+      title: "Stock Actual",
+      width: "12%",
       align: "center",
       render: (value, record) => (
-        <div>
-          <div className="font-medium">{value}</div>
-          <div className="text-xs text-gray-500">/ {record.stockMaximo}</div>
+        <div className="text-center">
+          <div className="font-bold text-lg text-gray-900">{value}</div>
+          <div className="text-xs text-gray-500">máx: {record.stockMaximo}</div>
         </div>
       ),
     },
@@ -193,84 +148,89 @@ export const InsumosList: React.FC<InsumosListProps> = ({
       title: "Estado",
       width: "10%",
       align: "center",
-      render: (_, record) => getStockBadge(record),
-    },
-    {
-      key: "esParaElaborar",
-      title: "Uso",
-      width: "8%",
-      align: "center",
-      render: (value: boolean) => (
-        <span
-          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-            value
-              ? "bg-purple-100 text-purple-800"
-              : "bg-gray-100 text-gray-800"
-          }`}
-        >
-          {value ? "Elaborar" : "Venta"}
-        </span>
-      ),
+      // ✅ CORREGIDO: Pasar el valor correctamente
+      render: (estado) => {
+        console.log("📊 Render estadoStock - valor:", estado);
+        return getStockBadge(estado);
+      },
     },
     {
       key: "acciones",
       title: "Acciones",
-      width: "11%",
+      width: "15%",
       align: "center",
       stickyRight: true,
       render: (_, record) => (
-        <div className="flex justify-center space-x-1">
-          <Button size="sm" variant="outline" onClick={() => onEdit(record)}>
+        <div className="flex justify-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onEdit(record)}
+            title="Editar"
+          >
             ✏️
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setHistorialInsumoId(record.idArticulo)}
+            title="Ver historial"
+          >
+            📊
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCompraInsumoId(record.idArticulo)}
+            title="Registrar compra"
+          >
+            🛒
           </Button>
           <Button
             size="sm"
             variant="danger"
             onClick={() => onDelete(record.idArticulo)}
-            disabled={record.cantidadProductosQueLoUsan > 0}
+            disabled={(record.cantidadProductosQueLoUsan ?? 0) > 0}
+            title={
+              (record.cantidadProductosQueLoUsan ?? 0) > 0
+                ? "No se puede eliminar, se usa en productos"
+                : "Eliminar"
+            }
           >
             🗑️
-          </Button>
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => setCompraInsumoId(record.idArticulo)}
-            title="Comprar stock"
-          >
-            🛒
           </Button>
         </div>
       ),
     },
   ];
 
+  // ==================== RENDER ====================
+
   return (
-    <div className="bg-white rounded-lg shadow p-4">
+    <div className="bg-white rounded-lg shadow p-4 space-y-4">
       {/* Filtros */}
-      <div className="flex flex-col md:flex-row md:items-end gap-3 mb-6">
+      <div className="flex flex-col md:flex-row md:items-end gap-3 bg-gray-50 p-3 rounded-lg">
         <div className="flex-1">
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            Nombre
+            🔍 Buscar por nombre
           </label>
           <input
-            className="w-full border border-gray-300 rounded-md p-2 text-sm"
             type="text"
             value={busqueda}
-            placeholder="Buscar por nombre"
             onChange={(e) => setBusqueda(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleBuscar();
-            }}
+            placeholder="Ej: Harina, Leche..."
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            Estado
+            📊 Estado
           </label>
           <select
-            className="border border-gray-300 rounded-md p-2 text-sm"
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Todos</option>
             {ESTADOS.map((est) => (
@@ -280,30 +240,31 @@ export const InsumosList: React.FC<InsumosListProps> = ({
             ))}
           </select>
         </div>
+
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            Uso
+            🏷️ Uso
           </label>
           <select
-            className="border border-gray-300 rounded-md p-2 text-sm"
             value={filtroUso}
             onChange={(e) => setFiltroUso(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Todos</option>
-            <option value="elaborar">Para Elaborar</option>
-            <option value="venta">Venta Directa</option>
+            <option value="elaborar">Elaborar</option>
+            <option value="venta">Venta</option>
           </select>
         </div>
-        <Button className="h-10 mt-4 md:mt-0" onClick={handleBuscar}>
-          Buscar
+
+        <Button onClick={handleLimpiar} variant="outline" size="sm">
+          🗑️ Limpiar
         </Button>
-        <Button
-          className="h-10 mt-4 md:mt-0"
-          variant="outline"
-          onClick={handleLimpiar}
-        >
-          Limpiar
-        </Button>
+      </div>
+
+      {/* Info de resultados */}
+      <div className="text-sm text-gray-600">
+        Mostrando <strong>{insumosFiltrados.length}</strong> de{" "}
+        <strong>{insumos.length}</strong> ingredientes
       </div>
 
       {/* Tabla */}
@@ -312,15 +273,18 @@ export const InsumosList: React.FC<InsumosListProps> = ({
         data={insumosFiltrados}
         loading={loading}
         emptyText="No hay ingredientes registrados"
-        rowClassName={(record) =>
-          record.stockActual > record.stockMaximo
-            ? "bg-pink-50"
-            : record.estadoStock === "CRITICO"
-            ? "bg-red-50"
-            : record.estadoStock === "BAJO"
-            ? "bg-yellow-50"
-            : ""
-        }
+        rowClassName={(record) => {
+          switch (record.estadoStock) {
+            case "CRITICO":
+              return "bg-red-50 hover:bg-red-100";
+            case "BAJO":
+              return "bg-yellow-50 hover:bg-yellow-100";
+            case "ALTO":
+              return "bg-blue-50 hover:bg-blue-100";
+            default:
+              return "hover:bg-gray-50";
+          }
+        }}
       />
 
       {/* Modal historial */}
@@ -328,19 +292,22 @@ export const InsumosList: React.FC<InsumosListProps> = ({
         <HistorialPrecios
           insumoId={historialInsumoId}
           onClose={() => setHistorialInsumoId(null)}
-          onDelete={() => onRefresh()}
+          onDelete={() => {
+            setHistorialInsumoId(null); // cierra modal tras eliminar
+            onRefresh(); // refresca lista principal
+          }}
         />
       )}
 
-      {/* Modal compra */}
-      {compraInsumoId !== null && (
+      {/* Modal: Compra */}
+      {compraInsumoId && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-white p-5 rounded-lg w-full max-w-sm shadow-xl max-h-[85vh] overflow-y-auto">
+          <div className="bg-white p-6 rounded-lg w-full max-w-sm shadow-xl max-h-[85vh] overflow-y-auto">
             <CompraForm
-              insumoId={compraInsumoId as number}
-              onClose={cerrarCompra}
+              insumoId={compraInsumoId}
+              onClose={() => setCompraInsumoId(null)}
               onSuccess={() => {
-                cerrarCompra();
+                setCompraInsumoId(null);
                 onRefresh();
               }}
             />

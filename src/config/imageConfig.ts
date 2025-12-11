@@ -1,11 +1,10 @@
-// src/config/imageConfig.ts
-
 export const IMAGE_CONFIG = {
   // URLs base
   API_BASE_URL: "http://localhost:8080/api",
 
   // Configuraciones de carga
   MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
+  MAX_IMAGES_PER_ENTITY: 5, // Máximo de imágenes por entidad (producto, insumo, etc)
   ALLOWED_TYPES: [
     "image/jpeg",
     "image/jpg",
@@ -29,6 +28,7 @@ export const IMAGE_CONFIG = {
     UPLOAD_FAILED: "Error al subir la imagen",
     DELETE_FAILED: "Error al eliminar la imagen",
     UNKNOWN_ERROR: "Error desconocido al procesar la imagen",
+    MAX_IMAGES_REACHED: "Se alcanzó el máximo de imágenes permitidas",
   },
 
   MESSAGES: {
@@ -36,13 +36,14 @@ export const IMAGE_CONFIG = {
     PENDING: "Pendiente de subir",
     UPLOADED: "Guardado en servidor",
     READY: "Listo para subir",
+    PRIMARY_IMAGE: "Imagen principal",
   },
 
   ENTITY_TYPES: {
-    INSUMO: "INSUMO",
-    MANUFACTURADO: "MANUFACTURADO",
-    CLIENTE: "CLIENTE",
-    PROMOCION: "PROMOCION",
+    INSUMO: "insumos",
+    MANUFACTURADO: "manufacturados",
+    CLIENTE: "clientes",
+    PROMOCION: "promociones",
   },
 };
 
@@ -68,6 +69,10 @@ export const isValidImageSize = (size: number): boolean => {
   return size <= IMAGE_CONFIG.MAX_FILE_SIZE;
 };
 
+export const isMaxImagesReached = (currentCount: number): boolean => {
+  return currentCount >= IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY;
+};
+
 export const extractFilenameFromUrl = (url: string): string | null => {
   try {
     const parts = url.split("/");
@@ -84,4 +89,8 @@ export const validateImageFile = (file: File): string | null => {
   if (file.size > IMAGE_CONFIG.MAX_FILE_SIZE)
     return IMAGE_CONFIG.ERRORS.FILE_TOO_LARGE;
   return null;
+};
+
+export const getMaxImagesErrorMessage = (): string => {
+  return `${IMAGE_CONFIG.ERRORS.MAX_IMAGES_REACHED} (${IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY} máximo)`;
 };

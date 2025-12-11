@@ -9,7 +9,6 @@ import { Select } from "../common/Select";
 import type { UnidadMedidaDTO } from "../../services";
 import { CategoriaSelector } from "../common/CategoriaSelector";
 import { ImageUpload } from "../common/ImageUpload";
-import { IMAGE_CONFIG } from "../../config/imageConfig";
 import { Alert } from "../common/Alert";
 
 interface InsumoFormProps {
@@ -29,20 +28,30 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
   onCancel,
   loading = false,
 }) => {
-  // Determinar si es creación o edición
   const isCreating = !insumo;
 
-  // Incluye TODOS los campos requeridos por el backend
-  const [formData, setFormData] = useState<ArticuloInsumoRequestDTO>({
+  // ==================== ESTADO ====================
+
+  type FormState = Omit<
+    ArticuloInsumoRequestDTO,
+    "precioVenta" | "precioCompra" | "stockActual" | "stockMaximo"
+  > & {
+    precioVenta: string;
+    precioCompra: string;
+    stockActual: string;
+    stockMaximo: string;
+  };
+
+  const [formData, setFormData] = useState<FormState>({
     denominacion: "",
-    precioVenta: 0,
+    precioVenta: "",
     idUnidadMedida: 0,
     idCategoria: 0,
-    precioCompra: 1,
-    stockActual: 0,
-    stockMaximo: 0,
+    precioCompra: "",
+    stockActual: "",
+    stockMaximo: "",
     esParaElaborar: true,
-    imagen: undefined,
+    imagenes: [],
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -51,86 +60,143 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
     message: string;
   } | null>(null);
 
+  // ==================== EFECTOS ====================
+
   useEffect(() => {
     if (insumo) {
       setFormData({
         denominacion: insumo.denominacion,
-        precioVenta: insumo.precioVenta || 1,
+        precioVenta:
+          insumo.precioVenta != null ? String(insumo.precioVenta) : "",
         idUnidadMedida: insumo.idUnidadMedida,
         idCategoria: insumo.idCategoria,
-        precioCompra: insumo.precioCompra || 0,
-        stockActual: insumo.stockActual || 0,
-        stockMaximo: insumo.stockMaximo,
+        precioCompra:
+          insumo.precioCompra != null ? String(insumo.precioCompra) : "",
+        stockActual:
+          insumo.stockActual != null ? String(insumo.stockActual) : "",
+        stockMaximo:
+          insumo.stockMaximo != null ? String(insumo.stockMaximo) : "",
         esParaElaborar: insumo.esParaElaborar,
-        imagen:
-          insumo.imagenes && insumo.imagenes.length > 0
-            ? insumo.imagenes[0]
-            : undefined,
+        imagenes: insumo.imagenes || [],
       });
     }
   }, [insumo]);
 
+  // ==================== VALIDACIÓN ====================
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!formData.denominacion.trim())
-      newErrors.denominacion = "La denominación es obligatoria";
-    if (!formData.idUnidadMedida)
-      newErrors.idUnidadMedida = "Debe seleccionar una unidad de medida";
-    if (!formData.idCategoria)
-      newErrors.idCategoria = "Debe seleccionar una categoría";
-    if (formData.stockMaximo <= 0)
-      newErrors.stockMaximo = "El stock máximo debe ser mayor a 0";
-    if (!isCreating && !formData.esParaElaborar && formData.precioVenta <= 0) {
-      newErrors.precioVenta = "El precio de venta debe ser mayor a 0";
+
+    if (!String(formData.denominacion).trim()) {
+      newErrors.denominacion = "Requerido";
+    }
+
+    if (!formData.idUnidadMedida) {
+      newErrors.idUnidadMedida = "Requerido";
+    }
+
+    if (!formData.idCategoria) {
+      newErrors.idCategoria = "Requerido";
+    }
+
+    const stockMaximoNum = Number(formData.stockMaximo);
+    if (isNaN(stockMaximoNum) || stockMaximoNum <= 0) {
+      newErrors.stockMaximo = "Debe ser > 0";
+    }
+
+    if (!isCreating && !formData.esParaElaborar) {
+      const precioVentaNum = Number(formData.precioVenta);
+      if (isNaN(precioVentaNum) || precioVentaNum <= 0) {
+        newErrors.precioVenta = "Requerido para venta directa";
+      }
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  // ==================== MANEJADORES ====================
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    if (isCreating) {
-      formData.precioVenta = 0;
-      formData.stockActual = 0;
-    }
-
     try {
-      await onSubmit(formData);
+      const payload: ArticuloInsumoRequestDTO = {
+        denominacion: String(formData.denominacion),
+        precioVenta: Number(formData.precioVenta) || 0,
+        idUnidadMedida: Number(formData.idUnidadMedida),
+        idCategoria: Number(formData.idCategoria),
+        precioCompra: Number(formData.precioCompra) || 0,
+        stockActual: Number(formData.stockActual) || 0,
+        stockMaximo: Number(formData.stockMaximo) || 0,
+        esParaElaborar: Boolean(formData.esParaElaborar),
+        imagenes: formData.imagenes || [],
+      };
+
+      const dataToSubmit = { ...payload };
+      delete (dataToSubmit as any).imagenes;
+
+      await onSubmit(dataToSubmit as ArticuloInsumoRequestDTO);
+
+      setAlert({
+        type: "success",
+        message: `Ingrediente ${
+          isCreating ? "creado" : "actualizado"
+        } correctamente`,
+      });
+
+      if (isCreating) {
+        setTimeout(() => {
+          setFormData({
+            denominacion: "",
+            precioVenta: "",
+            idUnidadMedida: 0,
+            idCategoria: 0,
+            precioCompra: "",
+            stockActual: "",
+            stockMaximo: "",
+            esParaElaborar: true,
+            imagenes: [],
+          });
+        }, 1000);
+      }
     } catch (error) {
-      console.error("Error al guardar insumo:", error);
+      const errorMsg =
+        error instanceof Error ? error.message : "Error al guardar";
+      setAlert({ type: "error", message: errorMsg });
     }
   };
 
-  const updateField = (field: keyof ArticuloInsumoRequestDTO, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const updateField = (field: keyof FormState | string, value: any) => {
+    setFormData((prev) => ({ ...(prev as any), [field]: value }));
+    // Limpiar error del campo
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
   };
 
-  const handleImageChange = (imagen: ImagenDTO | null) => {
-    updateField("imagen", imagen || undefined);
-    if (errors.imagen) setErrors((prev) => ({ ...prev, imagen: "" }));
+  const handleImagesChange = (imagenes: ImagenDTO[]) => {
+    updateField("imagenes", imagenes);
   };
 
   const handleEsParaElaborarChange = (esParaElaborar: boolean) => {
     updateField("esParaElaborar", esParaElaborar);
-    if (esParaElaborar && formData.imagen) {
-      updateField("imagen", undefined);
-    }
-    // Si pasa a venta directa y es edición, podés resetear el precioVenta a 1 si está en 0
+
+    // Si pasa a venta directa y precioVenta está en 0, ponerlo en 1
     if (
       !isCreating &&
       !esParaElaborar &&
-      (!formData.precioVenta || formData.precioVenta <= 0)
+      (!formData.precioVenta || Number(formData.precioVenta) <= 0)
     ) {
-      updateField("precioVenta", 1);
+      updateField("precioVenta", "1");
     }
   };
 
+  // ==================== RENDER ====================
+
   return (
     <>
-      {/* Mostrar alerts */}
       {alert && (
         <Alert
           type={alert.type}
@@ -141,15 +207,15 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
 
       {isCreating && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6 text-sm">
-          <p style={{ color: "#0066cc" }}>
-            <strong>ℹ️ Creación de nuevo ingrediente:</strong> El precio de
-            venta y la imagen se podrán agregar después de registrar la primera
-            compra.
+          <p className="text-blue-700">
+            <strong>ℹ️ Nota:</strong> Las imágenes se pueden agregar después de
+            crear el ingrediente.
           </p>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Información Básica */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField
             label="Denominación"
@@ -159,6 +225,7 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
             placeholder="Ej: Harina 000"
             required
             error={errors.denominacion}
+            disabled={loading}
           />
 
           <CategoriaSelector
@@ -168,6 +235,7 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
             label="Categoría"
             required
             error={errors.idCategoria}
+            disabled={loading}
           />
 
           <Select
@@ -179,14 +247,16 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
               value: um.idUnidadMedida,
               label: um.denominacion,
             }))}
-            placeholder="Seleccione unidad"
+            placeholder="Seleccione"
             required
             error={errors.idUnidadMedida}
+            disabled={loading}
           />
 
-          <div className="space-y-1">
+          {/* Uso del Ingrediente */}
+          <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Uso del Ingrediente
+              Uso <span className="text-red-500">*</span>
             </label>
             <div className="space-y-2">
               <label className="flex items-center">
@@ -195,10 +265,10 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
                   name="esParaElaborar"
                   checked={formData.esParaElaborar}
                   onChange={() => handleEsParaElaborarChange(true)}
-                  className="mr-2"
                   disabled={loading}
+                  className="mr-2"
                 />
-                <span>Para Elaborar (se usa en recetas)</span>
+                <span>Para Elaborar (recetas)</span>
               </label>
               <label className="flex items-center">
                 <input
@@ -206,21 +276,18 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
                   name="esParaElaborar"
                   checked={!formData.esParaElaborar}
                   onChange={() => handleEsParaElaborarChange(false)}
-                  className="mr-2"
                   disabled={loading}
+                  className="mr-2"
                 />
-                <span>Para Venta Directa</span>
+                <span>Venta Directa</span>
               </label>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              {formData.esParaElaborar
-                ? "Este ingrediente se usará en recetas"
-                : "Este ingrediente se venderá directamente al cliente"}
-            </p>
           </div>
+        </div>
 
-          {/* SOLO mostrar "Precio de Venta" si es para venta directa */}
-          {!isCreating && !formData.esParaElaborar && (
+        {/* Precio de Venta - Solo para venta directa */}
+        {!isCreating && !formData.esParaElaborar && (
+          <div className="border-t pt-6">
             <FormField
               label="Precio de Venta"
               name="precioVenta"
@@ -231,56 +298,55 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
               step={0.01}
               required
               disabled={loading}
-              placeholder="Ej: 200"
               error={errors.precioVenta}
             />
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Imagen */}
+        {/* Stock Máximo */}
         <div className="border-t pt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Imagen del Ingrediente
+            Configuración de Stock
           </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            {formData.esParaElaborar
-              ? "📸 Agrega una foto de la marca/envase para identificarlo fácilmente"
-              : "📸 Foto del producto que se verá en el catálogo"}
-          </p>
-          <div className="max-w-md">
-            <ImageUpload
-              entityType={IMAGE_CONFIG.ENTITY_TYPES.INSUMO}
-              entityId={insumo?.idArticulo}
-              currentImage={formData.imagen}
-              onImageChange={handleImageChange}
-              onError={(error) => setAlert({ type: "error", message: error })}
-              label="Imagen del Producto"
-              disabled={loading}
-            />
-          </div>
+          <FormField
+            label="Stock Máximo"
+            name="stockMaximo"
+            type="number"
+            value={formData.stockMaximo}
+            onChange={(value) => updateField("stockMaximo", value)}
+            placeholder="100"
+            min={1}
+            required
+            disabled={loading}
+            error={errors.stockMaximo}
+            helperText="Cantidad máxima a mantener en inventario"
+          />
         </div>
 
-        {/* SOLO MOSTRÁ este campo de stock máximo */}
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Stock Máximo
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              label="Stock Máximo"
-              name="stockMaximo"
-              type="number"
-              value={formData.stockMaximo}
-              onChange={(value) => updateField("stockMaximo", value)}
-              placeholder="100"
-              min={1}
-              required
-              disabled={loading}
-              error={errors.stockMaximo}
-            />
+        {/* Imágenes */}
+        {!isCreating && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Imágenes</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              📸{" "}
+              {formData.esParaElaborar
+                ? "Fotos del envase para identificarlo"
+                : "Fotos que se verán en el catálogo"}
+            </p>
+            <div className="max-w-md">
+              <ImageUpload
+                entityType="INSUMO"
+                entityId={insumo?.idArticulo}
+                currentImages={formData.imagenes || []}
+                onImagesChange={handleImagesChange}
+                disabled={loading}
+                multiple={true}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
+        {/* Botones */}
         <div className="flex justify-end space-x-3 pt-4 border-t">
           <Button
             type="button"

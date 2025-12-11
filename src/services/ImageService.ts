@@ -1,6 +1,7 @@
 import { IMAGE_CONFIG, validateImageFile } from "../config/imageConfig";
 import { apiClienteService } from "./ApiClienteService";
 import AuthPasswordService from "./AuthPasswordService";
+import type { ImagenDTO, EntityType } from "../types/common/ImagenDTO";
 
 export interface ImageUploadResult {
   success: boolean;
@@ -24,7 +25,7 @@ const ImageService = {
    */
   uploadImage: async (
     file: File,
-    entityType: string,
+    entityType: EntityType,
     entityId?: number,
     denominacion: string = file.name.split(".")[0]
   ): Promise<ImageUploadResult> => {
@@ -99,7 +100,7 @@ const ImageService = {
   updateImage: async (
     file: File,
     idImagen: number,
-    entityType: string,
+    entityType: EntityType,
     denominacion: string = file.name.split(".")[0]
   ): Promise<ImageUploadResult> => {
     try {
@@ -211,9 +212,9 @@ const ImageService = {
    * GET /api/imagenes/{entityType}/{entityId}
    */
   getImagesByEntity: async (
-    entityType: string,
+    entityType: EntityType,
     entityId: number
-  ): Promise<any[]> => {
+  ): Promise<ImagenDTO[]> => {
     try {
       console.log(`🔍 Obteniendo imágenes de ${entityType}/${entityId}`);
 
@@ -241,7 +242,7 @@ const ImageService = {
 
       const result = await response.json();
       console.log(`✅ Imágenes obtenidas: ${result.length} encontradas`);
-      return result;
+      return result as ImagenDTO[];
     } catch (error) {
       console.error("❌ Excepción en getImagesByEntity:", error);
       return [];
@@ -253,7 +254,7 @@ const ImageService = {
    *
    * GET /api/imagenes/{idImagen}
    */
-  getImageById: async (idImagen: number): Promise<any | null> => {
+  getImageById: async (idImagen: number): Promise<ImagenDTO | null> => {
     try {
       console.log(`🔍 Obteniendo imagen: ${idImagen}`);
 
@@ -281,7 +282,7 @@ const ImageService = {
 
       const result = await response.json();
       console.log(`✅ Imagen obtenida:`, result);
-      return result;
+      return result as ImagenDTO;
     } catch (error) {
       console.error("❌ Excepción en getImageById:", error);
       return null;

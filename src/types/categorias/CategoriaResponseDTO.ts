@@ -1,4 +1,5 @@
 import type { CategoriaSimpleDTO } from "../common/CategoriaSimple";
+import type { TipoCategoria } from "./TipoCategoria";
 
 export interface CategoriaResponseDTO {
   idCategoria: number;
@@ -12,4 +13,6 @@ export interface CategoriaResponseDTO {
 
   cantidadArticulos: number;
   cantidadSubcategorias?: number;
+
+  tipoCategoria: TipoCategoria;
 }

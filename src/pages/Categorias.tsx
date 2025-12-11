@@ -116,7 +116,7 @@ const Categorias: React.FC = () => {
             Gestión de Rubros
           </h1>
           <p className="text-gray-600 mt-1">
-            Administre las categorías para ingredientes y productos
+            Administre las categorías para comidas e ingredientes
           </p>
         </div>
         <Button onClick={handleCreate}>Nueva Categoría</Button>
@@ -131,31 +131,6 @@ const Categorias: React.FC = () => {
       {error && (
         <Alert type="error" title="Error al cargar datos" message={error} />
       )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-blue-600">
-            {categorias.filter((c) => !c.esSubcategoria).length}
-          </div>
-          <div className="text-sm text-gray-600">Categorías Principales</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-green-600">
-            {categorias.filter((c) => c.esSubcategoria).length}
-          </div>
-          <div className="text-sm text-gray-600">Subcategorías</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-purple-600">
-            {categorias.reduce(
-              (acc, cat) => acc + (cat.cantidadArticulos || 0),
-              0
-            )}
-          </div>
-          <div className="text-sm text-gray-600">Total Artículos</div>
-        </div>
-      </div>
 
       {/* Table */}
       <CategoriasList

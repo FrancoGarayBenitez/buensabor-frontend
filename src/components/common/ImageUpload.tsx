@@ -1,131 +1,166 @@
 import React, { useRef, useState, useEffect } from "react";
-import { PhotoIcon } from "@heroicons/react/24/outline";
+import { PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  IMAGE_CONFIG,
+  validateImageFile,
+  getMaxImagesErrorMessage,
+} from "../../config/imageConfig";
+import type { ImagenDTO, EntityType } from "../../types/common/ImagenDTO";
 import { useImageUpload } from "../../hooks/useImageUpload";
-import { IMAGE_CONFIG } from "../../config/imageConfig";
-import type { ImagenDTO } from "../../types/common/ImagenDTO";
-import ImageService from "../../services/ImageService";
 
 interface ImageUploadProps {
-  entityType: string;
+  entityType: EntityType; // ✅ usar tipo union
   entityId?: number;
-  currentImage?: ImagenDTO | null;
-  onImageChange: (imagen: ImagenDTO | null) => void;
+  currentImages?: ImagenDTO[] | null;
+  onImagesChange: (imagenes: ImagenDTO[]) => void;
   onError?: (error: string) => void;
   label?: string;
   required?: boolean;
   disabled?: boolean;
+  multiple?: boolean;
 }
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
   entityType,
   entityId,
-  currentImage,
-  onImageChange,
+  currentImages = [],
+  onImagesChange,
   onError,
   label = "Cargar Imagen",
   required = false,
   disabled = false,
+  multiple = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [images, setImages] = useState<ImagenDTO[]>(currentImages || []);
   const [error, setError] = useState<string | null>(null);
 
-  const { uploading, progress, uploadImage, updateImage, deleteImage } =
-    useImageUpload();
+  // ✅ usar hook centralizado para progreso/llamadas
+  const { uploading, progress, uploadImage, deleteImage } = useImageUpload();
 
   useEffect(() => {
-    setPreviewUrl(currentImage?.url || null);
-  }, [currentImage]);
+    setImages(currentImages || []);
+  }, [currentImages]);
 
-  const handleFileSelect = async (file: File) => {
-    if (disabled || uploading) return;
+  const canUpload = !disabled && !!entityId; // ✅ bloquear si no hay entityId
 
+  const handleFileSelect = async (files: FileList) => {
+    if (!canUpload) {
+      const msg =
+        "Primero guarda la entidad para obtener un ID y habilitar la subida.";
+      setError(msg);
+      onError?.(msg);
+      return;
+    }
+
+    if (uploading) return;
     setError(null);
 
-    try {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setPreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-
-      let result;
-
-      if (currentImage?.idImagen) {
-        result = await ImageService.updateImage(
-          file,
-          currentImage.idImagen,
-          entityType,
-          file.name.split(".")[0]
-        );
-      } else {
-        result = await ImageService.uploadImage(
-          file,
-          entityType,
-          entityId,
-          file.name.split(".")[0]
-        );
-      }
-
-      if (result.success && result.url) {
-        const newImage: ImagenDTO = {
-          idImagen: result.idImagen,
-          denominacion: result.denominacion || file.name,
-          url: result.url,
-        };
-        onImageChange(newImage);
-      } else {
-        const errorMsg = result.error || IMAGE_CONFIG.ERRORS.UPLOAD_FAILED;
-        setError(errorMsg);
-        onError?.(errorMsg);
-        setPreviewUrl(currentImage?.url || null);
-      }
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : IMAGE_CONFIG.ERRORS.UNKNOWN_ERROR;
-      setError(errorMsg);
-      onError?.(errorMsg);
-      setPreviewUrl(currentImage?.url || null);
+    if (!multiple && files.length > 1) {
+      const msg = "Solo se puede cargar una imagen";
+      setError(msg);
+      onError?.(msg);
+      return;
     }
+
+    if (
+      multiple &&
+      images.length + files.length > IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY
+    ) {
+      const msg = getMaxImagesErrorMessage();
+      setError(msg);
+      onError?.(msg);
+      return;
+    }
+
+    const newImages: ImagenDTO[] = [...images];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        setError(validationError);
+        onError?.(validationError);
+        continue;
+      }
+
+      try {
+        const result = await uploadImage(
+          file,
+          entityType,
+          entityId!,
+          file.name.split(".")[0]
+        );
+
+        if (result.success && result.url) {
+          newImages.push({
+            idImagen: result.idImagen,
+            denominacion: result.denominacion || file.name,
+            url: result.url,
+          });
+        } else {
+          const msg = result.error || IMAGE_CONFIG.ERRORS.UPLOAD_FAILED;
+          setError(msg);
+          onError?.(msg);
+        }
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : IMAGE_CONFIG.ERRORS.UNKNOWN_ERROR;
+        setError(msg);
+        onError?.(msg);
+      }
+    }
+
+    setImages(newImages);
+    onImagesChange(newImages);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleRemoveImage = async () => {
+  const handleRemoveImage = async (imageToRemove: ImagenDTO) => {
     if (disabled || uploading) return;
 
-    console.log(`🗑️ Eliminando imagen:`, currentImage?.idImagen);
-
-    if (currentImage?.idImagen) {
-      const deleted = await ImageService.deleteImage(currentImage.idImagen);
-      if (!deleted) {
-        console.warn(
-          `⚠️ Error al eliminar imagen en servidor, pero se limpia localmente`
-        );
+    try {
+      if (imageToRemove.idImagen) {
+        const ok = await deleteImage(imageToRemove.idImagen);
+        if (!ok) {
+          console.warn(
+            "No se pudo eliminar en servidor, se remueve localmente"
+          );
+        }
       }
-    }
-
-    onImageChange(null);
-    setPreviewUrl(null);
-    setError(null);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      const updated = images.filter(
+        (img) => img.idImagen !== imageToRemove.idImagen
+      );
+      setImages(updated);
+      onImagesChange(updated);
+      setError(null);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Error al eliminar imagen";
+      setError(msg);
+      onError?.(msg);
     }
   };
 
   const handleClick = () => {
-    if (disabled || uploading) return;
+    if (!canUpload) return;
+    if (disabled || uploading || (!multiple && images.length >= 1)) return;
     fileInputRef.current?.click();
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      handleFileSelect(e.target.files[0]);
+    if (e.target.files) {
+      handleFileSelect(e.target.files);
     }
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
-    if (disabled) return;
+    if (!canUpload || disabled || uploading) return;
     e.preventDefault();
     setIsDragOver(true);
   };
@@ -136,120 +171,155 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleDrop = (e: React.DragEvent) => {
-    if (disabled) return;
+    if (!canUpload || disabled || uploading) return;
     e.preventDefault();
     setIsDragOver(false);
-    if (e.dataTransfer.files?.[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files) {
+      handleFileSelect(e.dataTransfer.files);
     }
   };
+
+  const isFull =
+    (!multiple && images.length >= 1) ||
+    (multiple && images.length >= IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY);
 
   return (
     <div className="space-y-4">
       <label className="block text-sm font-medium text-gray-700">
         {label}
         {required && <span className="text-red-600 ml-1">*</span>}
+        {multiple && (
+          <span className="text-gray-500 text-xs ml-2">
+            ({images.length}/{IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY})
+          </span>
+        )}
       </label>
 
-      <div
-        className={`
-          relative border-2 border-dashed rounded-lg p-6 text-center transition-all
-          ${
-            disabled
-              ? "opacity-50 cursor-not-allowed bg-gray-50"
-              : "cursor-pointer"
-          }
-          ${
-            isDragOver && !disabled
-              ? "border-orange-500 bg-orange-50"
-              : "border-gray-300"
-          }
-          ${uploading ? "pointer-events-none opacity-60" : ""}
-        `}
-        onClick={handleClick}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileInputChange}
-          className="hidden"
-          disabled={disabled}
-        />
+      {!canUpload && (
+        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm text-yellow-700">
+            Primero guarda la entidad para habilitar la subida de imágenes.
+          </p>
+        </div>
+      )}
 
-        {previewUrl ? (
-          <div className="space-y-4">
-            <div className="relative inline-block">
-              <img
-                src={previewUrl}
-                alt="preview"
-                className="h-40 w-40 object-cover rounded-lg shadow-md"
-              />
-              {uploading && (
-                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                  <span className="text-white text-sm">{progress}%</span>
-                </div>
-              )}
-            </div>
+      {/* ZONA DE CARGA */}
+      {!isFull && (
+        <div
+          className={`
+            relative border-2 border-dashed rounded-lg p-6 text-center transition-all
+            ${
+              disabled
+                ? "opacity-50 cursor-not-allowed bg-gray-50"
+                : "cursor-pointer"
+            }
+            ${
+              isDragOver && !disabled
+                ? "border-orange-500 bg-orange-50"
+                : "border-gray-300"
+            }
+            ${uploading ? "pointer-events-none opacity-60" : ""}
+          `}
+          onClick={handleClick}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileInputChange}
+            className="hidden"
+            disabled={disabled || uploading || isFull || !canUpload}
+            multiple={multiple}
+          />
 
-            <div className="flex justify-center space-x-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleClick();
-                }}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                disabled={uploading || disabled}
-              >
-                Cambiar
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRemoveImage();
-                }}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-                disabled={uploading || disabled}
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        ) : (
           <div className="space-y-3">
             <PhotoIcon className="w-12 h-12 mx-auto text-gray-400" />
             <div>
               <p className="text-sm font-medium text-gray-700">
-                {uploading ? "Subiendo imagen..." : "Haz clic o arrastra aquí"}
+                {uploading
+                  ? "Subiendo imágenes..."
+                  : multiple
+                  ? "Haz clic o arrastra múltiples imágenes"
+                  : "Haz clic o arrastra una imagen"}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                JPG, PNG, GIF, WEBP - Máx 5MB
+                JPG, PNG, GIF, WEBP - Máx{" "}
+                {IMAGE_CONFIG.MAX_FILE_SIZE / (1024 * 1024)}MB
+                {multiple &&
+                  ` - Máx ${IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY} imágenes`}
               </p>
             </div>
           </div>
-        )}
 
-        {/* Barra de progreso */}
-        {uploading && (
-          <div className="mt-4">
-            <div className="w-full bg-gray-200 rounded-full h-2">
+          {/* Barra de progreso general */}
+          {uploading && (
+            <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
               <div
                 className="bg-orange-500 h-2 rounded-full transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* GALERÍA */}
+      {images.length > 0 && (
+        <div
+          className={`grid gap-4 ${
+            multiple
+              ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+              : "grid-cols-1"
+          }`}
+        >
+          {images.map((image, index) => (
+            <div key={image.idImagen || index} className="relative group">
+              <img
+                src={image.url}
+                alt={image.denominacion}
+                className="w-full h-40 object-cover rounded-lg shadow-md"
+              />
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleRemoveImage(image);
+                  }}
+                  className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                  title="Eliminar imagen"
+                  disabled={uploading || disabled}
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+              {multiple && index === 0 && (
+                <div className="absolute top-2 left-2 bg-orange-500 text-white text-xs px-2 py-1 rounded">
+                  Principal
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-600">⚠️ {error}</p>
+        </div>
+      )}
+
+      {isFull && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-600">
+            ℹ️{" "}
+            {multiple
+              ? `Máximo de ${IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY} imágenes alcanzado`
+              : "Una imagen cargada"}
+          </p>
         </div>
       )}
     </div>

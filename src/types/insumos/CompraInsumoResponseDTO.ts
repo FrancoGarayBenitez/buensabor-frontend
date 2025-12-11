@@ -1,6 +1,6 @@
 export interface CompraInsumoResponseDTO {
   id: number;
-  idArticulo: number;
+  idArticuloInsumo: number;
   denominacionInsumo: string;
   cantidad: number;
   precioUnitario: number;

@@ -2,10 +2,6 @@ import type { CategoriaRequestDTO } from "../types/categorias/CategoriaRequestDT
 import type { CategoriaResponseDTO } from "../types/categorias/CategoriaResponseDTO";
 import { apiClienteService } from "./ApiClienteService";
 
-/**
- * Servicio para operaciones CRUD de categorías
- * Usa apiClienteService que maneja automáticamente los tokens de Auth0
- */
 export class CategoriaService {
   private readonly endpoint = "/categorias";
 
@@ -60,21 +56,31 @@ export class CategoriaService {
     }
   }
 
-  // Métodos específicos para categorías
-  async getCategoriasIngredientes(): Promise<CategoriaResponseDTO[]> {
+  // ✅ NUEVOS: Métodos específicos por tipo
+  async getCategoriasComidas(): Promise<CategoriaResponseDTO[]> {
     try {
       return await apiClienteService.get<CategoriaResponseDTO[]>(
-        `${this.endpoint}/ingredientes`
+        `${this.endpoint}/tipo/comidas`
       );
     } catch (error: any) {
       throw this.handleError(error);
     }
   }
 
-  async getCategoriasProductos(): Promise<CategoriaResponseDTO[]> {
+  async getCategoriasIngredientes(): Promise<CategoriaResponseDTO[]> {
     try {
       return await apiClienteService.get<CategoriaResponseDTO[]>(
-        `${this.endpoint}/productos`
+        `${this.endpoint}/tipo/ingredientes`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  async getCategoriasByTipo(tipo: boolean): Promise<CategoriaResponseDTO[]> {
+    try {
+      return await apiClienteService.get<CategoriaResponseDTO[]>(
+        `${this.endpoint}/tipo/${tipo}`
       );
     } catch (error: any) {
       throw this.handleError(error);
@@ -93,9 +99,92 @@ export class CategoriaService {
     }
   }
 
-  /**
-   * Manejo centralizado de errores
-   */
+  async getSubcategoriasById(idPadre: number): Promise<CategoriaResponseDTO[]> {
+    try {
+      return await apiClienteService.get<CategoriaResponseDTO[]>(
+        `${this.endpoint}/${idPadre}/subcategorias`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Obtener subcategorías filtradas por tipo
+  async getSubcategoriasByIdAndTipo(
+    idPadre: number,
+    tipo: boolean
+  ): Promise<CategoriaResponseDTO[]> {
+    try {
+      return await apiClienteService.get<CategoriaResponseDTO[]>(
+        `${this.endpoint}/${idPadre}/subcategorias/tipo/${tipo}`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  async searchByDenominacion(
+    denominacion: string
+  ): Promise<CategoriaResponseDTO[]> {
+    try {
+      return await apiClienteService.get<CategoriaResponseDTO[]>(
+        `${this.endpoint}/buscar?denominacion=${encodeURIComponent(
+          denominacion
+        )}`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  // ✅ NUEVO: Buscar por denominación y tipo
+  async searchByDenominacionAndTipo(
+    denominacion: string,
+    esParaIngredientes: boolean
+  ): Promise<CategoriaResponseDTO[]> {
+    try {
+      return await apiClienteService.get<CategoriaResponseDTO[]>(
+        `${this.endpoint}/buscar/tipo?denominacion=${encodeURIComponent(
+          denominacion
+        )}&esParaIngredientes=${esParaIngredientes}`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  async existsByDenominacion(denominacion: string): Promise<boolean> {
+    try {
+      return await apiClienteService.get<boolean>(
+        `${this.endpoint}/exists?denominacion=${encodeURIComponent(
+          denominacion
+        )}`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  async hasSubcategorias(id: number): Promise<boolean> {
+    try {
+      return await apiClienteService.get<boolean>(
+        `${this.endpoint}/${id}/has-subcategorias`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  async hasArticulos(id: number): Promise<boolean> {
+    try {
+      return await apiClienteService.get<boolean>(
+        `${this.endpoint}/${id}/has-articulos`
+      );
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
   private handleError(error: any): Error {
     return error instanceof Error
       ? error

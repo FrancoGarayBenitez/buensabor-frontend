@@ -1,12 +1,11 @@
-import React from 'react';
-import { Modal } from '../common/Modal';
-import { ProductoForm } from './ProductoForm';
-import type { ArticuloManufacturadoRequestDTO } from '../../types/productos/ArticuloManufacturadoRequestDTO';
-import type { ArticuloManufacturadoResponseDTO } from '../../types/productos/ArticuloManufacturadoResponseDTO';
-import type { ArticuloInsumoResponseDTO } from '../../types/insumos/ArticuloInsumoResponseDTO';
-import type { CategoriaResponseDTO } from '../../types/categorias/CategoriaResponseDTO';
-import type { UnidadMedidaDTO } from '../../services';
-
+import React from "react";
+import { Modal } from "../common/Modal";
+import { ProductoForm } from "./ProductoForm";
+import type { ArticuloManufacturadoRequestDTO } from "../../types/productos/ArticuloManufacturadoRequestDTO";
+import type { ArticuloManufacturadoResponseDTO } from "../../types/productos/ArticuloManufacturadoResponseDTO";
+import type { ArticuloInsumoResponseDTO } from "../../types/insumos/ArticuloInsumoResponseDTO";
+import type { CategoriaResponseDTO } from "../../types/categorias/CategoriaResponseDTO";
+import type { UnidadMedidaDTO } from "../../services";
 
 interface ProductoModalProps {
   isOpen: boolean;
@@ -29,23 +28,22 @@ export const ProductoModal: React.FC<ProductoModalProps> = ({
   onSubmit,
   loading = false,
 }) => {
-  const title = producto ? 'Editar Producto' : 'Nuevo Producto';
+  const title = producto ? "Editar Producto" : "Nuevo Producto";
 
   const handleSubmit = async (data: ArticuloManufacturadoRequestDTO) => {
     await onSubmit(data);
     onClose();
   };
 
+  const categoriasComidas = categorias.filter(
+    (c) => c.tipoCategoria === "COMIDAS"
+  );
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title}
-      size="xl"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="xl">
       <ProductoForm
         producto={producto}
-        categorias={categorias}
+        categorias={categoriasComidas}
         unidadesMedida={unidadesMedida}
         ingredientes={ingredientes}
         onSubmit={handleSubmit}

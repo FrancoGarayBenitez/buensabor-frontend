@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import HistoricoPrecioService from "../../services/HistoricoPrecioService";
-import type { HistoricoPrecioDTO } from "../../types/insumos/HistoricoPrecioDTO";
-import type { HistoricoPrecioStats } from "../../types/insumos/HistoricoPrecioStats";
+import type {
+  HistoricoPrecioDTO,
+  HistoricoPrecioStatsDTO,
+  PrecioVentaSugeridoDTO,
+} from "../../types/insumos/HistoricoPrecioDTO";
 import { Button } from "../common/Index";
-import type { PrecioVentaSugeridoDTO } from "../../types/insumos/PrecioVentaSugeridoDTO";
+import { compraService, historicoPrecioService } from "../../services";
 
 interface Props {
   insumoId: number;
@@ -17,9 +19,8 @@ export const HistorialPrecios: React.FC<Props> = ({
   onDelete,
 }) => {
   const [historial, setHistorial] = useState<HistoricoPrecioDTO[]>([]);
-  const [estadisticas, setEstadisticas] = useState<HistoricoPrecioStats | null>(
-    null
-  );
+  const [estadisticas, setEstadisticas] =
+    useState<HistoricoPrecioStatsDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,55 +30,81 @@ export const HistorialPrecios: React.FC<Props> = ({
 
   // ✅ Cargar datos al montar o cuando cambia el margen
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [hist, stats, precioSug] = await Promise.all([
-          HistoricoPrecioService.getHistorial(insumoId),
-          HistoricoPrecioService.getEstadisticas(insumoId),
-          HistoricoPrecioService.getPrecioVentaSugerido(
-            insumoId,
-            margenGanancia
-          ),
-        ]);
-        setHistorial(hist);
-        setEstadisticas(stats);
-        setPrecioVentaSugerido(precioSug);
-        setError(null);
-      } catch (error) {
-        setError("Error cargando datos.");
-        console.error("❌ Error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    const t = setTimeout(() => {
+      const fetchData = async () => {
+        try {
+          const [hist, stats, precioSug] = await Promise.all([
+            historicoPrecioService.getHistorial(insumoId),
+            historicoPrecioService.getEstadisticas(insumoId),
+            historicoPrecioService.getPrecioVentaSugerido(
+              insumoId,
+              margenGanancia
+            ),
+          ]);
+          setHistorial(hist);
+          setEstadisticas(stats);
+          setPrecioVentaSugerido(precioSug);
+          setError(null);
+        } catch (error) {
+          setError("Error cargando datos.");
+          console.error("❌ Error:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchData();
+    }, 250);
+    return () => clearTimeout(t);
   }, [insumoId, margenGanancia]);
 
-  // ✅ Eliminar compra individual
-  const handleEliminarCompra = async (id: number) => {
-    const compra = historial.find((c) => c.idHistoricoPrecio === id);
+  // ✅ Eliminar compra individual - USANDO COMPRA SERVICE
+  const handleEliminarCompra = async (item: HistoricoPrecioDTO) => {
+    // ✅ Validar que existe idCompra
+    if (!item.idCompra) {
+      setError("Error: No se encontró el ID de la compra");
+      console.error("❌ idCompra es undefined para item:", item);
+      return;
+    }
 
     const confirmacion = window.confirm(
       `¿Está seguro de que desea eliminar esta compra?\n\n` +
-        `Fecha: ${new Date(compra?.fecha || "").toLocaleDateString(
-          "es-AR"
-        )}\n` +
-        `Precio: $${compra?.precioUnitario.toFixed(2)}\n` +
-        `Cantidad: ${compra?.cantidad}\n\n` +
+        `Fecha: ${new Date(item.fecha).toLocaleDateString("es-AR")}\n` +
+        `Precio: $${item.precioUnitario.toFixed(2)}\n` +
+        `Cantidad: ${item.cantidad}\n\n` +
         `Esta acción no se puede deshacer.`
     );
 
     if (!confirmacion) return;
 
-    setDeletingId(id);
+    setDeletingId(item.idCompra);
+
     try {
-      const success = await HistoricoPrecioService.deleteCompra(id);
-      if (success) {
-        setHistorial(historial.filter((c) => c.idHistoricoPrecio !== id));
-        console.log("✅ Compra eliminada exitosamente");
-        if (onDelete) onDelete();
-      }
+      console.log(`🗑️ Eliminando compra ${item.idCompra}`);
+
+      // ✅ Llamar a compraService.deleteCompra() en lugar de historico
+      const response = await compraService.deleteCompra(item.idCompra);
+      console.log("✅ Respuesta del servidor:", response);
+
+      // ✅ Actualizar tabla local con función para evitar estado desfasado
+      setHistorial((prev) =>
+        prev.filter((c) => c.idHistoricoPrecio !== item.idHistoricoPrecio)
+      );
+
+      // ✅ Refrescar datos (historial, estadísticas, precio sugerido)
+      const [hist, stats, precioSug] = await Promise.all([
+        historicoPrecioService.getHistorial(insumoId),
+        historicoPrecioService.getEstadisticas(insumoId),
+        historicoPrecioService.getPrecioVentaSugerido(insumoId, margenGanancia),
+      ]);
+
+      setHistorial(hist);
+      setEstadisticas(stats);
+      setPrecioVentaSugerido(precioSug);
+
+      console.log("✅ Compra eliminada exitosamente");
+
+      // ✅ Notificar al padre si es necesario
+      if (onDelete) onDelete();
     } catch (err) {
       setError("Error al eliminar la compra");
       console.error("❌ Error:", err);
@@ -101,6 +128,16 @@ export const HistorialPrecios: React.FC<Props> = ({
     (acc, c) => acc + c.precioUnitario * (c.cantidad || 1),
     0
   );
+
+  // ✅ Total de unidades compradas
+  const totalCantidadComprada = historial.reduce(
+    (acc, c) => acc + (c.cantidad || 0),
+    0
+  );
+
+  // ✅ Promedio ponderado (coincide con la lista de insumos)
+  const precioPromedioPonderado =
+    totalCantidadComprada > 0 ? totalInvertido / totalCantidadComprada : 0;
 
   // ✅ Calcular ganancia potencial si se vende todo
   const gananciaTotal = precioVentaSugerido
@@ -165,10 +202,9 @@ export const HistorialPrecios: React.FC<Props> = ({
               </p>
             </div>
 
-            {/* ✅ Estadísticas - ACTUALIZADO CON DTO */}
+            {/* ✅ Estadísticas */}
             {estadisticas && estadisticas.totalRegistros > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
-                {/* Total de compras */}
                 <div className="text-center">
                   <p className="text-sm text-gray-600">Compras</p>
                   <p className="text-xl font-bold text-blue-600">
@@ -176,17 +212,25 @@ export const HistorialPrecios: React.FC<Props> = ({
                   </p>
                 </div>
 
-                {/* Promedio de compra */}
                 <div className="text-center">
                   <p className="text-sm text-gray-600">
-                    Precio Promedio Compra
+                    Precio Promedio (ponderado)
                   </p>
                   <p className="text-xl font-bold text-gray-700">
-                    ${estadisticas.precioPromedio.toFixed(2)}
+                    ${precioPromedioPonderado.toFixed(2)}
                   </p>
+                  {/* Mostrar referencia del promedio simple si difiere */}
+                  {Math.abs(
+                    (estadisticas?.precioPromedio ?? 0) -
+                      precioPromedioPonderado
+                  ) > 0.009 && (
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Promedio simple: $
+                      {estadisticas!.precioPromedio.toFixed(2)}
+                    </p>
+                  )}
                 </div>
 
-                {/* Total invertido */}
                 <div className="text-center">
                   <p className="text-sm text-gray-600">Total Invertido</p>
                   <p className="text-xl font-bold text-purple-600">
@@ -194,7 +238,6 @@ export const HistorialPrecios: React.FC<Props> = ({
                   </p>
                 </div>
 
-                {/* Rango de precios */}
                 <div className="text-center">
                   <p className="text-sm text-gray-600">Min - Max</p>
                   <p className="text-sm font-mono text-gray-700">
@@ -203,7 +246,6 @@ export const HistorialPrecios: React.FC<Props> = ({
                   </p>
                 </div>
 
-                {/* ✅ Precio sugerido de VENTA */}
                 {precioVentaSugerido &&
                   precioVentaSugerido.precioVentaSugerido > 0 && (
                     <>
@@ -216,7 +258,6 @@ export const HistorialPrecios: React.FC<Props> = ({
                         </p>
                       </div>
 
-                      {/* ✅ Ganancia unitaria */}
                       <div className="text-center bg-green-100 rounded-lg p-2">
                         <p className="text-sm text-gray-600">Ganancia/Unidad</p>
                         <p className="text-xl font-bold text-green-700">
@@ -224,7 +265,6 @@ export const HistorialPrecios: React.FC<Props> = ({
                         </p>
                       </div>
 
-                      {/* ✅ Ganancia total potencial */}
                       {gananciaTotal > 0 && (
                         <div className="text-center bg-emerald-100 rounded-lg p-2 md:col-span-1">
                           <p className="text-sm text-gray-600">
@@ -275,20 +315,16 @@ export const HistorialPrecios: React.FC<Props> = ({
                       </td>
                       <td className="px-4 py-2 text-center">
                         <button
-                          onClick={() =>
-                            handleEliminarCompra(item.idHistoricoPrecio)
-                          }
-                          disabled={deletingId === item.idHistoricoPrecio}
+                          onClick={() => handleEliminarCompra(item)}
+                          disabled={deletingId === item.idCompra}
                           className={`text-sm px-2 py-1 rounded transition ${
-                            deletingId === item.idHistoricoPrecio
+                            deletingId === item.idCompra
                               ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                               : "text-red-600 hover:bg-red-100 hover:text-red-800"
                           }`}
                           title="Eliminar esta compra"
                         >
-                          {deletingId === item.idHistoricoPrecio
-                            ? "🗑️ ..."
-                            : "🗑️"}
+                          {deletingId === item.idCompra ? "🗑️ ..." : "🗑️"}
                         </button>
                       </td>
                     </tr>
@@ -314,3 +350,5 @@ export const HistorialPrecios: React.FC<Props> = ({
     </div>
   );
 };
+
+export default HistorialPrecios;

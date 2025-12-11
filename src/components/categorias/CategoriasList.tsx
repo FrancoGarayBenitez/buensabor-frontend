@@ -20,30 +20,32 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [filtros, setFiltros] = useState({
     busqueda: "",
-    tipo: "todos", // 'todos', 'principales', 'subcategorias'
-    mostrarVacio: true, // mostrar categorías sin artículos
+    tipo: "todos", // 'todos', 'principales', 'subcategorias', 'comidas', 'ingredientes', 'bebidas'
+    mostrarVacio: true,
   });
 
-  // Organizar categorías principales con sus subcategorías
-  const categoriasOrganizadas = React.useMemo(() => {
-    const principales = categorias.filter((cat) => !cat.esSubcategoria);
-
-    return principales.map((principal) => ({
-      ...principal,
-      subcategorias: categorias.filter(
-        (cat) =>
-          cat.esSubcategoria &&
-          cat.denominacionCategoriaPadre === principal.denominacion
-      ),
-    }));
-  }, [categorias]);
+  // Tipo auxiliar para los nodos en la jerarquía
+  type CategoriaNodo = {
+    idCategoria: number;
+    denominacion: string;
+    esSubcategoria: boolean;
+    tipoCategoria: "COMIDAS" | "INGREDIENTES" | "BEBIDAS";
+    cantidadArticulos?: number;
+    hijos: CategoriaNodo[];
+    nivel?: number;
+  };
 
   // Función recursiva para construir la jerarquía completa
-  const construirJerarquia = (categorias: CategoriaResponseDTO[]): any[] => {
-    const categoriasMap = new Map(
-      categorias.map((cat) => [cat.idCategoria, { ...cat, hijos: [] as any[] }])
+  const construirJerarquia = (
+    categorias: CategoriaResponseDTO[]
+  ): CategoriaNodo[] => {
+    const categoriasMap = new Map<number, CategoriaNodo>(
+      categorias.map((cat) => [
+        cat.idCategoria,
+        { ...cat, hijos: [] as CategoriaNodo[] } as CategoriaNodo,
+      ])
     );
-    const raices: any[] = [];
+    const raices: CategoriaNodo[] = [];
 
     categorias.forEach((categoria) => {
       const nodo = categoriasMap.get(categoria.idCategoria)!;
@@ -53,7 +55,6 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
         if (padre) {
           padre.hijos.push(nodo);
         } else {
-          // Si no encuentra el padre, lo trata como raíz
           raices.push(nodo);
         }
       } else {
@@ -65,8 +66,11 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
   };
 
   // Función recursiva para aplanar la jerarquía con niveles
-  const aplanarJerarquia = (nodos: any[], nivel = 0): any[] => {
-    const resultado: any[] = [];
+  const aplanarJerarquia = (
+    nodos: CategoriaNodo[],
+    nivel = 0
+  ): CategoriaNodo[] => {
+    const resultado: CategoriaNodo[] = [];
 
     nodos.forEach((nodo) => {
       resultado.push({ ...nodo, nivel });
@@ -86,76 +90,113 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
 
   // Aplicar filtros
   const categoriasFiltradas = React.useMemo(() => {
-    if (filtros.tipo === "subcategorias") {
-      return categorias
-        .filter((cat) => cat.esSubcategoria)
-        .filter(
-          (cat) =>
-            !filtros.busqueda ||
-            cat.denominacion
-              .toLowerCase()
-              .includes(filtros.busqueda.toLowerCase())
-        )
-        .filter((cat) => filtros.mostrarVacio || cat.cantidadArticulos > 0)
-        .map((cat) => ({ ...cat, nivel: 0, hijos: [] }));
+    let categoriasBase = categoriasJerarquicas;
+
+    const filtrarPorTipoCategoria = (
+      nodos: CategoriaNodo[],
+      tipo: "COMIDAS" | "INGREDIENTES" | "BEBIDAS"
+    ): CategoriaNodo[] => {
+      return nodos
+        .filter((nodo) => nodo.tipoCategoria === tipo)
+        .map((nodo) => ({
+          ...nodo,
+          hijos: filtrarPorTipoCategoria(nodo.hijos || [], tipo),
+        }));
+    };
+
+    if (filtros.tipo === "comidas") {
+      categoriasBase = filtrarPorTipoCategoria(categoriasBase, "COMIDAS");
+    } else if (filtros.tipo === "ingredientes") {
+      categoriasBase = filtrarPorTipoCategoria(categoriasBase, "INGREDIENTES");
+    } else if (filtros.tipo === "bebidas") {
+      categoriasBase = filtrarPorTipoCategoria(categoriasBase, "BEBIDAS");
     }
 
-    let resultado = categoriasJerarquicas;
+    // ✅ Recolectar subcategorías recursivamente
+    const recolectarSubcategorias = (
+      nodos: CategoriaNodo[]
+    ): CategoriaNodo[] => {
+      const out: CategoriaNodo[] = [];
+      for (const nodo of nodos) {
+        if (nodo.esSubcategoria) out.push({ ...nodo, nivel: 0, hijos: [] });
+        if (nodo.hijos?.length)
+          out.push(...recolectarSubcategorias(nodo.hijos));
+      }
+      return out;
+    };
+
+    // Filtrar por nivel (principales vs subcategorías)
+    if (filtros.tipo === "subcategorias") {
+      let subcats = recolectarSubcategorias(categoriasBase);
+
+      // Búsqueda
+      if (filtros.busqueda) {
+        const q = filtros.busqueda.toLowerCase();
+        subcats = subcats.filter((cat) =>
+          cat.denominacion.toLowerCase().includes(q)
+        );
+      }
+
+      // Vacíos
+      if (!filtros.mostrarVacio) {
+        subcats = subcats.filter((cat) => (cat.cantidadArticulos || 0) > 0);
+      }
+
+      return subcats;
+    }
 
     if (filtros.tipo === "principales") {
-      resultado = resultado.filter((cat) => !cat.esSubcategoria);
+      categoriasBase = categoriasBase.filter((cat) => !cat.esSubcategoria);
     }
 
-    // Aplicar filtros de búsqueda recursivamente - MEJORADO
+    // Búsqueda recursiva sobre jerarquía
     if (filtros.busqueda) {
-      const filtrarPorBusqueda = (nodos: any[]): any[] => {
+      const filtrarPorBusqueda = (nodos: CategoriaNodo[]): CategoriaNodo[] => {
         return nodos
           .map((nodo) => {
             const coincideNombre = nodo.denominacion
               .toLowerCase()
               .includes(filtros.busqueda.toLowerCase());
-
-            // Filtrar hijos recursivamente
             const hijosFiltrados = filtrarPorBusqueda(nodo.hijos || []);
-
-            // Si el nodo actual coincide O tiene hijos que coinciden, lo incluimos
             if (coincideNombre || hijosFiltrados.length > 0) {
               return {
                 ...nodo,
-                hijos: coincideNombre ? nodo.hijos : hijosFiltrados, // Si coincide el padre, mostrar todos sus hijos
+                hijos: coincideNombre ? nodo.hijos : hijosFiltrados,
               };
             }
             return null;
           })
-          .filter((nodo) => nodo !== null);
+          .filter(
+            (nodo): nodo is CategoriaNodo & { hijos: CategoriaNodo[] } =>
+              nodo !== null
+          );
       };
-
-      resultado = filtrarPorBusqueda(resultado);
+      categoriasBase = filtrarPorBusqueda(categoriasBase);
     }
 
-    // Aplicar filtro de categorías vacías
+    // Ocultar categorías vacías en jerarquía
     if (!filtros.mostrarVacio) {
-      const filtrarVacios = (nodos: any[]): any[] => {
+      const filtrarVacios = (nodos: CategoriaNodo[]): CategoriaNodo[] => {
         return nodos
           .map((nodo) => {
             const hijosFiltrados = filtrarVacios(nodo.hijos || []);
-
-            // Incluir si tiene artículos O tiene hijos válidos
-            if (nodo.cantidadArticulos > 0 || hijosFiltrados.length > 0) {
-              return {
-                ...nodo,
-                hijos: hijosFiltrados,
-              };
+            if (
+              (nodo.cantidadArticulos || 0) > 0 ||
+              hijosFiltrados.length > 0
+            ) {
+              return { ...nodo, hijos: hijosFiltrados };
             }
             return null;
           })
-          .filter((nodo) => nodo !== null);
+          .filter(
+            (nodo): nodo is CategoriaNodo & { hijos: CategoriaNodo[] } =>
+              nodo !== null
+          );
       };
-
-      resultado = filtrarVacios(resultado);
+      categoriasBase = filtrarVacios(categoriasBase);
     }
 
-    return resultado;
+    return categoriasBase;
   }, [categoriasJerarquicas, filtros, categorias]);
 
   const toggleExpand = (id: number) => {
@@ -176,6 +217,16 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
 
     return aplanarJerarquia(categoriasFiltradas);
   }, [categoriasFiltradas, expandedRows, filtros.tipo]);
+
+  // Obtener todas las categorías principales para Expandir/Colapsar
+  const todasLasPrincipales = React.useMemo(() => {
+    const obtenerPrincipales = (nodos: any[]): number[] => {
+      return nodos
+        .filter((n) => !n.esSubcategoria)
+        .flatMap((n) => [n.idCategoria, ...obtenerPrincipales(n.hijos || [])]);
+    };
+    return obtenerPrincipales(categoriasJerarquicas);
+  }, [categoriasJerarquicas]);
 
   const columns: TableColumn<any>[] = [
     {
@@ -202,8 +253,30 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
           {record.nivel > 0 && (
             <span className="mr-2 text-gray-400">{"└─".repeat(1)}</span>
           )}
-          <span className={record.nivel > 0 ? "text-gray-600" : "font-medium"}>
-            {value}
+          <span
+            className={`flex items-center space-x-2 ${
+              record.nivel > 0 ? "text-gray-600" : "font-medium"
+            }`}
+          >
+            <span>{value}</span>
+            {/* Indicador de tipo solo en principales */}
+            {!record.esSubcategoria && (
+              <span
+                className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                  record.tipoCategoria === "INGREDIENTES"
+                    ? "bg-green-100 text-green-700"
+                    : record.tipoCategoria === "BEBIDAS"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-orange-100 text-orange-700"
+                }`}
+              >
+                {record.tipoCategoria === "INGREDIENTES"
+                  ? "🥕 Ingredientes"
+                  : record.tipoCategoria === "BEBIDAS"
+                  ? "🥤 Bebidas"
+                  : "🍕 Comidas"}
+              </span>
+            )}
           </span>
         </div>
       ),
@@ -213,11 +286,9 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
       title: "Subcategorías",
       width: "15%",
       align: "center",
-      render: (_, record: any) => {
-        return (
-          <span className="text-gray-600">{record.hijos?.length || 0}</span>
-        );
-      },
+      render: (_: any, record: any) => (
+        <span className="text-gray-600">{record.hijos?.length || 0}</span>
+      ),
     },
     {
       key: "cantidadArticulos",
@@ -235,23 +306,26 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
       ),
     },
     {
-      key: "subcategorias",
-      title: "Subcategorías",
+      key: "tipoCategoria",
+      title: "Tipo",
       width: "15%",
       align: "center",
-      render: (subcategorias: any[], record: any) => {
-        if (record.esSubcategoria) return "-";
-        return (
-          <span className="text-gray-600">{subcategorias?.length || 0}</span>
-        );
-      },
+      render: (_: any, record: any) => (
+        <span className="text-sm text-gray-600">
+          {record.tipoCategoria === "INGREDIENTES"
+            ? "Ingrediente"
+            : record.tipoCategoria === "BEBIDAS"
+            ? "Bebida"
+            : "Comida"}
+        </span>
+      ),
     },
     {
       key: "acciones",
       title: "Acciones",
       width: "25%",
       align: "center",
-      render: (_, record: any) => (
+      render: (_: any, record: any) => (
         <div className="flex justify-center space-x-2">
           <Button size="sm" variant="outline" onClick={() => onEdit(record)}>
             Editar
@@ -260,7 +334,7 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
             size="sm"
             variant="danger"
             onClick={() => onDelete(record.idCategoria)}
-            disabled={record.cantidadArticulos > 0}
+            disabled={(record.cantidadArticulos || 0) > 0}
           >
             Eliminar
           </Button>
@@ -303,8 +377,11 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="todos">Todas las categorías</option>
-              <option value="principales">Solo principales</option>
-              <option value="subcategorias">Solo subcategorías</option>
+              <option value="comidas">🍕 Solo comidas</option>
+              <option value="ingredientes">🥕 Solo ingredientes</option>
+              <option value="bebidas">🥤 Solo bebidas</option>
+              <option value="principales">📌 Solo principales</option>
+              <option value="subcategorias">📁 Solo subcategorías</option>
             </select>
           </div>
 
@@ -313,11 +390,7 @@ export const CategoriasList: React.FC<CategoriasListProps> = ({
             <Button
               size="sm"
               variant="outline"
-              onClick={() =>
-                setExpandedRows(
-                  new Set(categoriasOrganizadas.map((c) => c.idCategoria))
-                )
-              }
+              onClick={() => setExpandedRows(new Set(todasLasPrincipales))}
             >
               Expandir Todo
             </Button>

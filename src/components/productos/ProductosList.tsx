@@ -1,14 +1,13 @@
 import React from "react";
 import { Table, type TableColumn } from "../common/Table";
-import { Button } from "../common/Button";
+import { Eye, Pencil, Trash2, AlertCircle } from "lucide-react";
 import type { ArticuloManufacturadoResponseDTO } from "../../types/productos/ArticuloManufacturadoResponseDTO";
 
 interface ProductosListProps {
   productos: ArticuloManufacturadoResponseDTO[];
   loading?: boolean;
   onEdit: (producto: ArticuloManufacturadoResponseDTO) => void;
-  desactivarProducto: (id: number) => void;
-  activarProducto: (id: number) => void;
+  onDelete: (id: number) => void;
   onViewDetails: (producto: ArticuloManufacturadoResponseDTO) => void;
   idProductoEnAccion?: number | null;
 }
@@ -17,8 +16,7 @@ export const ProductosList: React.FC<ProductosListProps> = ({
   productos,
   loading = false,
   onEdit,
-  desactivarProducto,
-  activarProducto,
+  onDelete,
   onViewDetails,
   idProductoEnAccion,
 }) => {
@@ -34,7 +32,7 @@ export const ProductosList: React.FC<ProductosListProps> = ({
             <img
               src={record.imagenes[0].url}
               alt={record.imagenes[0].denominacion}
-              className="w-12 h-12 object-cover rounded-lg shadow-sm"
+              className="w-12 h-12 object-cover rounded-lg shadow-sm hover:shadow-md transition-shadow"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src =
@@ -49,6 +47,7 @@ export const ProductosList: React.FC<ProductosListProps> = ({
         </div>
       ),
     },
+
     {
       key: "denominacion",
       title: "Producto",
@@ -64,29 +63,32 @@ export const ProductosList: React.FC<ProductosListProps> = ({
         </div>
       ),
     },
+
     {
-      key: "categoria.denominacion",
+      key: "denominacionCategoria",
       title: "Categoría",
       width: "15%",
       render: (_, record) => (
-        <span>
-          {record.categoria.denominacionCategoriaPadre
-            ? `${record.categoria.denominacionCategoriaPadre} > ${record.categoria.denominacion}`
-            : record.categoria.denominacion}
+        <span className="text-sm text-gray-700">
+          {record.esSubcategoria && record.denominacionCategoriaPadre
+            ? `${record.denominacionCategoriaPadre} > ${record.denominacionCategoria}`
+            : record.denominacionCategoria}
         </span>
       ),
     },
+
     {
       key: "tiempoEstimadoEnMinutos",
       title: "Tiempo",
       width: "8%",
       align: "center",
       render: (value) => (
-        <span className="text-sm font-medium text-blue-600">{value} min</span>
+        <span className="text-sm font-medium text-blue-600">⏱ {value} min</span>
       ),
     },
+
     {
-      key: "costoTotal",
+      key: "costoProduccion",
       title: "Costo",
       width: "10%",
       align: "right",
@@ -96,6 +98,7 @@ export const ProductosList: React.FC<ProductosListProps> = ({
         </span>
       ),
     },
+
     {
       key: "precioVenta",
       title: "Precio",
@@ -107,83 +110,93 @@ export const ProductosList: React.FC<ProductosListProps> = ({
         </span>
       ),
     },
+
     {
       key: "margenGanancia",
       title: "Margen",
       width: "8%",
       align: "center",
-      render: (value: number) => (
-        <span
-          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-            value >= 3
-              ? "bg-green-100 text-green-800"
-              : value >= 2
-              ? "bg-yellow-100 text-yellow-800"
-              : "bg-red-100 text-red-800"
-          }`}
-        >
-          {value.toFixed(1)}x
-        </span>
-      ),
+      render: (value: number) => {
+        const margenPorcentaje = value * 100;
+        return (
+          <span
+            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+              value >= 3
+                ? "bg-green-100 text-green-800"
+                : value >= 2
+                ? "bg-yellow-100 text-yellow-800"
+                : "bg-red-100 text-red-800"
+            }`}
+          >
+            {margenPorcentaje.toFixed(0)}%
+          </span>
+        );
+      },
     },
+
     {
       key: "stockSuficiente",
       title: "Stock",
-      width: "8%",
+      width: "10%",
       align: "center",
       render: (value: boolean, record) => (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center gap-1">
           <span
-            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full ${
               value ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
             }`}
           >
-            {value ? "OK" : "Falta"}
+            {value ? "✅ OK" : "❌ Falta"}
           </span>
-          <span className="text-xs text-gray-500 mt-1">
+          <span className="text-xs text-gray-500">
             Max: {record.cantidadMaximaPreparable}
           </span>
         </div>
       ),
     },
+
     {
       key: "acciones",
       title: "Acciones",
-      width: "11%",
+      width: "13%",
       align: "center",
       render: (_, record) => (
-        <div className="flex justify-center space-x-1">
+        <div className="flex justify-center gap-2">
           {record.eliminado ? (
-            <Button
-              size="sm"
-              className="bg-blue-100 text-blue-800 hover:bg-blue-200"
-              onClick={() => activarProducto(record.idArticulo)}
-              title="Activar producto"
-              disabled={idProductoEnAccion === record.idArticulo}
-            >
-              {idProductoEnAccion === record.idArticulo ? "..." : "Activar"}
-            </Button>
+            <div className="flex items-center gap-2 text-gray-500 text-xs">
+              <AlertCircle className="w-4 h-4" />
+              <span>Inactivo</span>
+            </div>
           ) : (
             <>
-              <Button
-                size="sm"
-                variant="secondary"
+              <button
                 onClick={() => onViewDetails(record)}
+                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 title="Ver detalles"
               >
-                Ver
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => onEdit(record)}>
-                Editar
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => desactivarProducto(record.idArticulo)}
-                disabled={idProductoEnAccion === record.idArticulo}
+                <Eye className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => onEdit(record)}
+                className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                title="Editar producto"
               >
-                {idProductoEnAccion === record.idArticulo ? "..." : "Eliminar"}
-              </Button>
+                <Pencil className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => onDelete(record.idArticulo)}
+                disabled={idProductoEnAccion === record.idArticulo}
+                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Desactivar producto"
+              >
+                {idProductoEnAccion === record.idArticulo ? (
+                  <span className="text-xs">⏳</span>
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+              </button>
             </>
           )}
         </div>
@@ -198,7 +211,7 @@ export const ProductosList: React.FC<ProductosListProps> = ({
       loading={loading}
       emptyText="No hay productos registrados"
       rowClassName={(record) => {
-        if (record.eliminado) return "bg-gray-400 ";
+        if (record.eliminado) return "bg-gray-100 opacity-50";
         if (!record.stockSuficiente) return "bg-red-50";
         return "";
       }}

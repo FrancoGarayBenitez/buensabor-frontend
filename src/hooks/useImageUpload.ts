@@ -1,23 +1,27 @@
 import { useState } from "react";
 import ImageService, { type ImageUploadResult } from "../services/ImageService";
+import type { EntityType, ImagenDTO } from "../types/common/ImagenDTO";
 
 interface UseImageUploadReturn {
   uploading: boolean;
   progress: number;
   uploadImage: (
     file: File,
-    entityType: string,
+    entityType: EntityType,
     entityId?: number,
     denominacion?: string
   ) => Promise<ImageUploadResult>;
   updateImage: (
     file: File,
     idImagen: number,
-    entityType: string,
+    entityType: EntityType,
     denominacion?: string
   ) => Promise<ImageUploadResult>;
   deleteImage: (idImagen: number) => Promise<boolean>;
-  getImagesByEntity: (entityType: string, entityId: number) => Promise<any[]>;
+  getImagesByEntity: (
+    entityType: EntityType,
+    entityId: number
+  ) => Promise<ImagenDTO[]>;
 }
 
 export const useImageUpload = (): UseImageUploadReturn => {
@@ -26,7 +30,7 @@ export const useImageUpload = (): UseImageUploadReturn => {
 
   const uploadImage = async (
     file: File,
-    entityType: string,
+    entityType: EntityType,
     entityId?: number,
     denominacion?: string
   ): Promise<ImageUploadResult> => {
@@ -57,7 +61,7 @@ export const useImageUpload = (): UseImageUploadReturn => {
   const updateImage = async (
     file: File,
     idImagen: number,
-    entityType: string,
+    entityType: EntityType,
     denominacion?: string
   ): Promise<ImageUploadResult> => {
     setUploading(true);
@@ -89,9 +93,9 @@ export const useImageUpload = (): UseImageUploadReturn => {
   };
 
   const getImagesByEntity = async (
-    entityType: string,
+    entityType: EntityType,
     entityId: number
-  ): Promise<any[]> => {
+  ): Promise<ImagenDTO[]> => {
     return ImageService.getImagesByEntity(entityType, entityId);
   };
 

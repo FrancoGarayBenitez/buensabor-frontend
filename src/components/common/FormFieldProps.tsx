@@ -4,8 +4,8 @@ interface FormFieldProps {
   label: string;
   name: string;
   type?: "text" | "number" | "email" | "password" | "textarea";
-  value: string | number;
-  onChange: (value: string | number) => void;
+  value?: string | number;
+  onChange?: (value: string | number) => void;
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
@@ -39,23 +39,8 @@ export const FormField: React.FC<FormFieldProps> = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const inputValue = e.target.value;
-
-    if (type === "number") {
-      // Permitir borrar el campo (string vacío)
-      if (inputValue === "") {
-        onChange("");
-        return;
-      }
-
-      // Convertir solo si es un número válido
-      const numValue = parseFloat(inputValue);
-      if (!isNaN(numValue)) {
-        onChange(numValue);
-      }
-      // Si no es un número válido, ignorar el cambio (no actualizar)
-    } else {
-      onChange(inputValue);
-    }
+    // Enviar siempre el string crudo (incluye "" cuando el usuario borra)
+    onChange?.(inputValue);
   };
 
   const inputClasses = `
@@ -74,6 +59,9 @@ export const FormField: React.FC<FormFieldProps> = ({
       : "rgba(205, 108, 80, 0.5)",
   } as React.CSSProperties;
 
+  // Normalizar value a string para evitar controlled/uncontrolled warnings
+  const normalizedValue = value ?? "";
+
   return (
     <div className={`space-y-1 ${className}`}>
       <label
@@ -89,7 +77,7 @@ export const FormField: React.FC<FormFieldProps> = ({
         <textarea
           id={name}
           name={name}
-          value={value}
+          value={String(normalizedValue)}
           onChange={handleChange}
           placeholder={placeholder}
           required={required}
@@ -113,7 +101,7 @@ export const FormField: React.FC<FormFieldProps> = ({
           id={name}
           name={name}
           type={type}
-          value={value}
+          value={String(normalizedValue)}
           onChange={handleChange}
           placeholder={placeholder}
           required={required}

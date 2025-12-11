@@ -10,14 +10,18 @@ export const useProductos = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ==================== OPERACIONES CRUD ====================
+
   const fetchProductos = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await productoService.getAll();
       setProductos(data);
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar productos"
+      );
     } finally {
       setLoading(false);
     }
@@ -26,7 +30,7 @@ export const useProductos = () => {
   const createProducto = async (data: ArticuloManufacturadoRequestDTO) => {
     try {
       const nuevoProducto = await productoService.create(data);
-      await fetchProductos(); // Refrescar la lista
+      await fetchProductos();
       return nuevoProducto;
     } catch (err) {
       throw err;
@@ -39,7 +43,7 @@ export const useProductos = () => {
   ) => {
     try {
       const productoActualizado = await productoService.update(id, data);
-      await fetchProductos(); // Refrescar la lista
+      await fetchProductos();
       return productoActualizado;
     } catch (err) {
       throw err;
@@ -48,37 +52,21 @@ export const useProductos = () => {
 
   const deleteProducto = async (id: number) => {
     try {
-      await productoService.delete(id);
-      await fetchProductos(); // Refrescar la lista
-    } catch (err) {
-      throw err;
-    }
-  };
-
-    const desactivarProducto = async (id: number) => {
-    try {
-      await productoService.desactivar(id);
+      await productoService.bajaLogica(id);
       await fetchProductos();
     } catch (err) {
       throw err;
     }
   };
 
-  const activarProducto = async (id: number) => {
-    try {
-      await productoService.activar(id);
-      await fetchProductos();
-    } catch (err) {
-      throw err;
-    }
-  };
+  // ==================== BÚSQUEDAS ESPECÍFICAS ====================
 
   const getProductoById = async (id: number) => {
     try {
       return await productoService.getById(id);
     } catch (err) {
       throw err;
-  }
+    }
   };
 
   const getProductosByCategoria = async (idCategoria: number) => {
@@ -89,29 +77,60 @@ export const useProductos = () => {
     }
   };
 
-  const getProductosDisponibles = async () => {
+  const searchProductos = async (denominacion: string) => {
     try {
-      return await productoService.getProductosDisponibles();
+      return await productoService.searchByDenominacion(denominacion);
     } catch (err) {
       throw err;
     }
   };
 
-  const calcularCosto = async (id: number) => {
+  // ==================== GESTIÓN DE IMÁGENES ====================
+
+  const uploadImagenes = async (
+    idProducto: number,
+    files: File[]
+  ): Promise<any[]> => {
     try {
-      return await productoService.calcularCosto(id);
+      return await productoService.uploadImagenes(idProducto, files);
     } catch (err) {
       throw err;
     }
   };
 
-  const verificarStock = async (id: number) => {
+  const updateImagen = async (
+    idProducto: number,
+    file: File,
+    denominacion?: string
+  ): Promise<any> => {
     try {
-      return await productoService.verificarStock(id);
+      return await productoService.updateImagen(
+        idProducto,
+        file,
+        denominacion || "Imagen del producto"
+      );
     } catch (err) {
       throw err;
     }
   };
+
+  const deleteImagen = async (idImagen: number): Promise<boolean> => {
+    try {
+      return await productoService.deleteImagen(idImagen);
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const getImagenes = async (idProducto: number): Promise<any[]> => {
+    try {
+      return await productoService.getImagenes(idProducto);
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  // ==================== CICLO DE VIDA ====================
 
   useEffect(() => {
     fetchProductos();
@@ -128,14 +147,16 @@ export const useProductos = () => {
     updateProducto,
     deleteProducto,
     getProductoById,
-    desactivarProducto,
-    activarProducto,
-    
-    // Operaciones específicas
+
+    // Búsquedas específicas
     getProductosByCategoria,
-    getProductosDisponibles,
-    calcularCosto,
-    verificarStock,
+    searchProductos,
+
+    // Gestión de imágenes
+    uploadImagenes,
+    updateImagen,
+    deleteImagen,
+    getImagenes,
 
     // Utilidades
     refresh: fetchProductos,

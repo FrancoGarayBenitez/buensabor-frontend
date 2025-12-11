@@ -1,7 +1,7 @@
 // src/pages/ProductoDetalle.tsx - MIGRADO AL CONTEXT UNIFICADO
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ProductoService } from "../services/ProductoService";
+import { productoService } from "../services/ProductoService";
 import type { ArticuloManufacturadoResponseDTO } from "../types/productos/ArticuloManufacturadoResponseDTO";
 import {
   ArrowLeft,
@@ -16,17 +16,13 @@ import {
   Store,
 } from "lucide-react";
 
-// 🚀 NUEVO: Usar Context Unificado en lugar del hook complejo
 import {
   useCarritoItems,
   useCarritoTotales,
   useCarritoUnificado,
 } from "../context/CarritoUnificadoContext";
 
-// ✅ MANTENER: Modal del carrito (por ahora)
 import CarritoModal from "../components/cart/CarritoModal";
-
-const productoService = new ProductoService();
 
 const ProductoDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,13 +34,11 @@ const ProductoDetalle: React.FC = () => {
   const [showAgregarExito, setShowAgregarExito] = useState(false);
   const [carritoAbierto, setCarritoAbierto] = useState(false);
 
-  // 🚀 NUEVO: Context Unificado (reemplaza useCarritoMercadoPago)
   const { items, cantidadTotal, estaVacio, agregarItem, obtenerItem } =
     useCarritoItems();
 
   const { subtotal, total, tieneDescuentos, totales } = useCarritoTotales();
 
-  // 🚀 NUEVO: Context completo para funciones adicionales
   const { state, setDatosEntrega } = useCarritoUnificado();
 
   useEffect(() => {
@@ -79,16 +73,13 @@ const ProductoDetalle: React.FC = () => {
 
   const imagenUrl = producto.imagenes?.[0]?.url ?? null;
 
-  // Rating simulado (igual que en tu Home)
-  const getProductRating = (cantidadVendida: number) => {
-    if (cantidadVendida >= 100) return 4.9;
-    if (cantidadVendida >= 50) return 4.7;
-    if (cantidadVendida >= 20) return 4.5;
-    if (cantidadVendida >= 10) return 4.3;
+  const getProductRating = (stockMax: number) => {
+    if (stockMax >= 100) return 4.9;
+    if (stockMax >= 50) return 4.7;
+    if (stockMax >= 20) return 4.5;
+    if (stockMax >= 10) return 4.3;
     return 4.0;
   };
-
-  // 🚀 NUEVAS FUNCIONES SIMPLIFICADAS:
 
   const handleAgregarAlCarrito = () => {
     if (!producto || !producto.stockSuficiente) return;
@@ -102,7 +93,6 @@ const ProductoDetalle: React.FC = () => {
     agregarItem(producto, cantidad);
     setShowAgregarExito(true);
 
-    // Ocultar mensaje de éxito después de 3 segundos
     setTimeout(() => {
       setShowAgregarExito(false);
     }, 3000);
@@ -124,15 +114,12 @@ const ProductoDetalle: React.FC = () => {
     setCantidad((prev) => (prev > 1 ? prev - 1 : 1));
   };
 
-  // 🚀 MEJORADO: Obtener cantidad del producto en el carrito
   const cantidadEnCarrito = obtenerItem(producto.idArticulo)?.cantidad || 0;
 
-  // 🚀 MEJORADO: Datos de entrega desde Context
   const tipoEnvio = state.datosEntrega.tipoEnvio;
   const gastosEnvio = totales?.gastosEnvio || 0;
   const descuentoTotal = totales?.descuentoTotal || 0;
 
-  // 🚀 MEJORADO: Funciones de entrega simplificadas
   const handleSetTakeAway = () => {
     setDatosEntrega({
       tipoEnvio: "TAKE_AWAY",
@@ -159,7 +146,6 @@ const ProductoDetalle: React.FC = () => {
       </button>
 
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-        {/* 🎉 NUEVO: Banner de éxito */}
         {showAgregarExito && (
           <div className="bg-green-500 text-white p-3 flex items-center justify-center">
             <CheckCircle className="w-5 h-5 mr-2" />
@@ -198,7 +184,7 @@ const ProductoDetalle: React.FC = () => {
               </span>
               <span className="flex items-center text-yellow-500">
                 <Star className="w-4 h-4 fill-current mr-1" />
-                {getProductRating(producto.cantidadVendida)}
+                {getProductRating(producto.cantidadMaximaPreparable)}
               </span>
               <span className="flex items-center text-gray-500">
                 <Clock className="w-4 h-4 mr-1" />
@@ -208,7 +194,7 @@ const ProductoDetalle: React.FC = () => {
 
             <div className="mb-4 flex items-center gap-2">
               <span className="inline-block bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-600">
-                {producto.categoria.denominacion}
+                {producto.denominacionCategoria}
               </span>
               <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full">
                 {producto.denominacionUnidadMedida}
@@ -228,10 +214,10 @@ const ProductoDetalle: React.FC = () => {
 
             <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
               <span>
-                Vendidos: <b>{producto.cantidadVendida}</b>
+                Costo: <b>${producto.costoProduccion.toFixed(0)}</b>
               </span>
               <span>
-                Ingredientes: <b>{producto.cantidadIngredientes}</b>
+                Margen: <b>{(producto.margenGanancia * 100).toFixed(0)}%</b>
               </span>
             </div>
 
@@ -308,7 +294,6 @@ const ProductoDetalle: React.FC = () => {
               )}
             </div>
 
-            {/* 🚀 MEJORADO: Mostrar si ya está en el carrito */}
             {cantidadEnCarrito > 0 && (
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-blue-700 text-sm">
@@ -340,7 +325,7 @@ const ProductoDetalle: React.FC = () => {
                     {detalle.denominacionInsumo ?? "Ingrediente"}
                   </span>
                   <span className="text-sm text-gray-500">
-                    {detalle.cantidad} {detalle.unidadMedida ?? ""}
+                    {detalle.cantidad} {detalle.unidadMedidaInsumo ?? ""}
                   </span>
                 </li>
               ))}
@@ -349,14 +334,13 @@ const ProductoDetalle: React.FC = () => {
         )}
       </div>
 
-      {/* 🚀 MEJORADO: Resumen del carrito con Context Unificado */}
+      {/* Resumen del carrito */}
       {!estaVacio && (
         <div className="mt-6 bg-gray-50 rounded-lg p-4">
           <h3 className="font-semibold text-gray-800 mb-3">
             Resumen de tu pedido ({cantidadTotal} productos)
           </h3>
 
-          {/* 🚀 MEJORADO: Selector de tipo de entrega */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             <button
               onClick={handleSetTakeAway}
@@ -385,7 +369,6 @@ const ProductoDetalle: React.FC = () => {
             </button>
           </div>
 
-          {/* 🚀 MEJORADO: Totales con datos del Context */}
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span>Productos ({cantidadTotal}):</span>
@@ -415,7 +398,6 @@ const ProductoDetalle: React.FC = () => {
             </div>
           </div>
 
-          {/* 🚀 NUEVO: Resumen de descuentos */}
           {totales?.resumenDescuentos && tieneDescuentos && (
             <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
               ✨ {totales.resumenDescuentos}
@@ -431,7 +413,6 @@ const ProductoDetalle: React.FC = () => {
         </div>
       )}
 
-      {/* Modal del carrito */}
       <CarritoModal
         abierto={carritoAbierto}
         onCerrar={() => setCarritoAbierto(false)}
