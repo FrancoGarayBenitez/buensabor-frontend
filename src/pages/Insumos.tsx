@@ -20,6 +20,7 @@ export const Insumos: React.FC = () => {
     updateInsumo,
     deleteInsumo,
     refresh,
+    refreshInsumoById,
   } = useInsumos();
 
   const { categorias } = useCategorias();
@@ -238,6 +239,7 @@ export const Insumos: React.FC = () => {
         onEdit={handleEdit}
         onDelete={handleDelete}
         onRefresh={refresh}
+        onRefreshInsumoById={refreshInsumoById} // ✅ pasar callback
       />
 
       {/* Modal */}

@@ -4,15 +4,12 @@ import { Alert } from "../components/common/Alert";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { ProductosList } from "../components/productos/ProductosList";
 import { ProductoModal } from "../components/productos/ProductoModal";
-import { ProductoDetalleModal } from "../components/productos/ProductoDetalleModal";
+import { ProductoPreviewModal } from "../components/productos/ProductoPreviewModal";
 import { useProductos } from "../hooks/useProductos";
-import { useInsumos } from "../hooks/useInsumos";
 import { useCategorias } from "../hooks/useCategorias";
-import { unidadMedidaService } from "../services";
+import { unidadMedidaService, type UnidadMedidaDTO } from "../services";
 import type { ArticuloManufacturadoResponseDTO } from "../types/productos/ArticuloManufacturadoResponseDTO";
 import type { ArticuloManufacturadoRequestDTO } from "../types/productos/ArticuloManufacturadoRequestDTO";
-import type { UnidadMedidaDTO } from "../services";
-import { RankingView } from "../components/productos/RankingView";
 
 export const Productos: React.FC = () => {
   const {
@@ -21,21 +18,20 @@ export const Productos: React.FC = () => {
     error,
     createProducto,
     updateProducto,
-    deleteProducto,
+    // deleteProducto,            // ❌ eliminar: ya no se usa
+    refresh,
+    activateProducto, // ✅
+    deactivateProducto, // ✅
   } = useProductos();
 
-  const { insumos } = useInsumos();
   const { categorias } = useCategorias();
-  const [isRankingView, setIsRankingView] = useState(false);
+
+  // ==================== ESTADO ====================
+
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadMedidaDTO[]>([]);
   const [loadingUnidades, setLoadingUnidades] = useState(false);
-
   const [modalOpen, setModalOpen] = useState(false);
-  const [detalleModalOpen, setDetalleModalOpen] = useState(false);
   const [editingProducto, setEditingProducto] = useState<
-    ArticuloManufacturadoResponseDTO | undefined
-  >();
-  const [viewingProducto, setViewingProducto] = useState<
     ArticuloManufacturadoResponseDTO | undefined
   >();
   const [operationLoading, setOperationLoading] = useState(false);
@@ -43,25 +39,16 @@ export const Productos: React.FC = () => {
     type: "success" | "error" | "warning";
     message: string;
   } | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewProducto, setPreviewProducto] = useState<
+    ArticuloManufacturadoResponseDTO | undefined
+  >(undefined);
+  // ✅ nuevo: error para mostrar en el formulario dentro del modal
+  const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null);
 
-  // Filtros de búsqueda
-  const [searchInput, setSearchInput] = useState("");
-  const [categoriaInput, setCategoriaInput] = useState<number | "all">("all");
-  const [precioMinInput, setPrecioMinInput] = useState<number | "">("");
-  const [precioMaxInput, setPrecioMaxInput] = useState<number | "">("");
-  const [estadoInput, setEstadoInput] = useState<
-    "all" | "activos" | "eliminados"
-  >("activos"); // Por defecto mostrar activos
+  // ==================== EFECTOS ====================
 
-  // Filtros aplicados
-  const [search, setSearch] = useState("");
-  const [categoriaSel, setCategoriaSel] = useState<number | "all">("all");
-  const [precioMin, setPrecioMin] = useState<number | "">("");
-  const [precioMax, setPrecioMax] = useState<number | "">("");
-  const [estadoSel, setEstadoSel] = useState<"all" | "activos" | "eliminados">(
-    "activos"
-  );
-
+  // Cargar unidades de medida
   useEffect(() => {
     const fetchUnidadesMedida = async () => {
       setLoadingUnidades(true);
@@ -69,7 +56,6 @@ export const Productos: React.FC = () => {
         const unidades = await unidadMedidaService.getAll();
         setUnidadesMedida(unidades);
       } catch (error) {
-        console.error("Error al cargar unidades de medida:", error);
         setAlert({
           type: "error",
           message: "Error al cargar unidades de medida",
@@ -82,42 +68,38 @@ export const Productos: React.FC = () => {
     fetchUnidadesMedida();
   }, []);
 
-  const handleCreate = () => {
-    const ingredientesParaElaborar = insumos.filter((i) => i.esParaElaborar);
-    if (ingredientesParaElaborar.length === 0) {
-      setAlert({
-        type: "warning",
-        message:
-          'Debe crear ingredientes marcados como "Para Elaborar" antes de crear productos.',
-      });
-      return;
-    }
+  // ==================== MANEJADORES ====================
 
+  const handleCreate = () => {
     setEditingProducto(undefined);
+    setFormErrorMessage(null); // ✅ limpia errores previos del form
     setModalOpen(true);
   };
 
   const handleEdit = (producto: ArticuloManufacturadoResponseDTO) => {
     setEditingProducto(producto);
+    setFormErrorMessage(null); // ✅ limpia errores previos del form
     setModalOpen(true);
   };
 
-  const handleViewDetails = (producto: ArticuloManufacturadoResponseDTO) => {
-    setViewingProducto(producto);
-    setDetalleModalOpen(true);
+  // Ver detalles en vista previa
+  const handleView = (producto: ArticuloManufacturadoResponseDTO) => {
+    setPreviewProducto(producto);
+    setPreviewOpen(true);
   };
 
-  const handleEditFromDetails = (
+  // Abre edición desde la vista previa
+  const handleEditFromPreview = (
     producto: ArticuloManufacturadoResponseDTO
   ) => {
-    setViewingProducto(undefined);
+    setPreviewOpen(false);
     setEditingProducto(producto);
-    setDetalleModalOpen(false);
     setModalOpen(true);
   };
 
   const handleSubmit = async (data: ArticuloManufacturadoRequestDTO) => {
     setOperationLoading(true);
+    setFormErrorMessage(null); // ✅ limpiar antes de intentar guardar
     try {
       if (editingProducto) {
         await updateProducto(editingProducto.idArticulo, data);
@@ -127,90 +109,47 @@ export const Productos: React.FC = () => {
         });
       } else {
         await createProducto(data);
-        setAlert({ type: "success", message: "Producto creado correctamente" });
+        setAlert({
+          type: "success",
+          message: "Producto creado correctamente",
+        });
       }
-      setModalOpen(false);
-      setEditingProducto(undefined);
+      closeModal();
     } catch (error) {
-      setAlert({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Error al guardar el producto",
-      });
-    } finally {
-      setOperationLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (
-      !window.confirm("¿Estás seguro de que deseas desactivar este producto?")
-    ) {
-      return;
-    }
-
-    setOperationLoading(true);
-    try {
-      await deleteProducto(id);
-      setAlert({
-        type: "success",
-        message: "Producto desactivado correctamente",
-      });
-    } catch (error) {
-      setAlert({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Error al desactivar el producto",
-      });
-    } finally {
-      setOperationLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
-    return productos
-      .filter((p) =>
-        p.denominacion.toLowerCase().includes(search.toLowerCase())
-      )
-      .filter((p) =>
-        categoriaSel === "all" ? true : p.idCategoria === categoriaSel
-      )
-      .filter((p) =>
-        precioMin === "" ? true : p.precioVenta >= Number(precioMin)
-      )
-      .filter((p) =>
-        precioMax === "" ? true : p.precioVenta <= Number(precioMax)
-      )
-      .filter((p) =>
-        estadoSel === "all"
-          ? true
-          : estadoSel === "activos"
-          ? !p.eliminado
-          : p.eliminado
+      // ✅ Mantener el modal abierto y mostrar el error en el formulario
+      setFormErrorMessage(
+        error instanceof Error ? error.message : "Error al guardar el producto"
       );
+    } finally {
+      setOperationLoading(false);
+    }
   };
 
-  const productosFiltrados = applyFilters();
+  const handleActivate = async (id: number) => {
+    await activateProducto(id);
+    setAlert({ type: "success", message: "Producto activado" });
+  };
 
-  const categoriasConProductos = [
-    ...new Set(productosFiltrados.map((p) => p.idCategoria)),
-  ];
-  const categoriasFiltradas = categorias.filter((cat) =>
-    categoriasConProductos.includes(cat.idCategoria)
-  );
+  const handleDeactivate = async (id: number) => {
+    await deactivateProducto(id);
+    setAlert({ type: "success", message: "Producto desactivado" });
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingProducto(undefined);
+    setFormErrorMessage(null); // ✅ limpiar error de form al cerrar
+  };
+
+  // ==================== ESTADÍSTICAS ====================
 
   const stats = {
-    total: productosFiltrados.length,
-    disponibles: productosFiltrados.filter((p) => p.stockSuficiente).length,
-    sinStock: productosFiltrados.filter((p) => !p.stockSuficiente).length,
-    margenAlto: productosFiltrados.filter((p) => p.margenGanancia >= 3).length,
+    total: productos.length,
+    activos: productos.filter((p) => !p.eliminado).length,
+    sinStock: productos.filter((p) => !p.stockSuficiente).length,
   };
 
-  const ingredientesParaElaborar = insumos.filter((i) => i.esParaElaborar);
+  // ==================== RENDER ====================
 
   if (loading || loadingUnidades) {
     return (
@@ -222,217 +161,112 @@ export const Productos: React.FC = () => {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* ENCABEZADO Y PESTAÑAS */}
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Productos</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Gestión de Productos
+          </h1>
           <p className="text-gray-600 mt-1">
-            Administre los productos manufacturados o vea el ranking de ventas.
+            Administre los productos manufacturados, recetas y precios
           </p>
         </div>
-        {!isRankingView && (
-          <Button onClick={handleCreate}>Nuevo Producto</Button>
-        )}
+        <Button onClick={handleCreate}>+ Nuevo Producto</Button>
       </div>
 
-      <div className="flex border-b">
-        <button
-          className={`py-2 px-4 text-lg ${
-            !isRankingView
-              ? "border-b-2 border-purple-600 font-semibold text-gray-800"
-              : "text-gray-500"
-          }`}
-          onClick={() => setIsRankingView(false)}
-        >
-          Mis Productos
-        </button>
-        <button
-          className={`py-2 px-4 text-lg ${
-            isRankingView
-              ? "border-b-2 border-purple-600 font-semibold text-gray-800"
-              : "text-gray-500"
-          }`}
-          onClick={() => setIsRankingView(true)}
-        >
-          Ranking de Ventas
-        </button>
-      </div>
-
-      {/* RENDERIZADO CONDICIONAL */}
-      {isRankingView ? (
-        <RankingView />
-      ) : (
-        <div className="space-y-6">
-          {alert && (
-            <Alert
-              type={alert.type}
-              message={alert.message}
-              onClose={() => setAlert(null)}
-            />
-          )}
-          {error && (
-            <Alert type="error" title="Error al cargar datos" message={error} />
-          )}
-          {ingredientesParaElaborar.length === 0 && (
-            <Alert
-              type="warning"
-              title="Sin ingredientes para elaborar"
-              message="No hay ingredientes marcados como 'Para Elaborar'. Debe crear ingredientes antes de poder crear productos."
-            />
-          )}
-
-          {/* FORMULARIO DE BÚSQUEDA Y FILTROS */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearch(searchInput);
-              setCategoriaSel(categoriaInput);
-              setPrecioMin(precioMinInput);
-              setPrecioMax(precioMaxInput);
-              setEstadoSel(estadoInput);
-            }}
-            className="bg-white p-4 rounded-lg shadow grid grid-cols-1 md:grid-cols-6 gap-4 items-end"
-          >
-            <input
-              type="text"
-              placeholder="Buscar producto"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
-            />
-            <select
-              value={categoriaInput}
-              onChange={(e) =>
-                setCategoriaInput(
-                  e.target.value === "all" ? "all" : Number(e.target.value)
-                )
-              }
-              className="w-full border px-3 py-2 rounded-lg"
-            >
-              <option value="all">Todas las categorías</option>
-              {categoriasFiltradas.map((cat) => (
-                <option key={cat.idCategoria} value={cat.idCategoria}>
-                  {cat.denominacion}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              placeholder="Precio mín."
-              value={precioMinInput}
-              onChange={(e) =>
-                setPrecioMinInput(
-                  e.target.value === "" ? "" : Number(e.target.value)
-                )
-              }
-              className="w-full border px-3 py-2 rounded-lg"
-            />
-            <input
-              type="number"
-              placeholder="Precio máx."
-              value={precioMaxInput}
-              onChange={(e) =>
-                setPrecioMaxInput(
-                  e.target.value === "" ? "" : Number(e.target.value)
-                )
-              }
-              className="w-full border px-3 py-2 rounded-lg"
-            />
-            <select
-              value={estadoInput}
-              onChange={(e) =>
-                setEstadoInput(
-                  e.target.value as "all" | "activos" | "eliminados"
-                )
-              }
-              className="w-full border px-3 py-2 rounded-lg"
-            >
-              <option value="all">Activos/Eliminados</option>
-              <option value="activos">Solo Activos</option>
-              <option value="eliminados">Solo Eliminados</option>
-            </select>
-            <button
-              type="submit"
-              className="text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 cursor-pointer"
-              style={{ backgroundColor: "#CD6C50" }}
-            >
-              Buscar
-            </button>
-          </form>
-
-          {/* ESTADÍSTICAS */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-blue-600">
-                {stats.total}
-              </div>
-              <div className="text-sm text-gray-600">Total Productos</div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-green-600">
-                {stats.disponibles}
-              </div>
-              <div className="text-sm text-gray-600">Stock Disponible</div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-red-600">
-                {stats.sinStock}
-              </div>
-              <div className="text-sm text-gray-600">Sin Stock</div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-purple-600">
-                {stats.margenAlto}
-              </div>
-              <div className="text-sm text-gray-600">Margen Alto (3x+)</div>
-            </div>
-          </div>
-
-          {stats.sinStock > 0 && (
-            <Alert
-              type="warning"
-              title="Productos sin stock suficiente"
-              message={`Hay ${stats.sinStock} producto(s) que no se pueden preparar por falta de ingredientes.`}
-            />
-          )}
-
-          {/* LISTA DE PRODUCTOS */}
-          <ProductosList
-            productos={productosFiltrados}
-            loading={loading}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onViewDetails={handleViewDetails}
-          />
-
-          {/* MODAL DE EDICIÓN/CREACIÓN */}
-          <ProductoModal
-            isOpen={modalOpen}
-            onClose={() => {
-              setModalOpen(false);
-              setEditingProducto(undefined);
-            }}
-            producto={editingProducto}
-            categorias={categorias}
-            unidadesMedida={unidadesMedida}
-            ingredientes={ingredientesParaElaborar}
-            onSubmit={handleSubmit}
-            loading={operationLoading}
-          />
-
-          {/* MODAL DE DETALLES (ahora usa ProductoDetalleModal unificado) */}
-          <ProductoDetalleModal
-            isOpen={detalleModalOpen}
-            onClose={() => {
-              setDetalleModalOpen(false);
-              setViewingProducto(undefined);
-            }}
-            producto={viewingProducto}
-            onAgregarCarrito={handleEditFromDetails}
-          />
-        </div>
+      {/* Alerts */}
+      {alert && (
+        <Alert
+          type={alert.type}
+          message={alert.message}
+          onClose={() => setAlert(null)}
+        />
       )}
+
+      {error && (
+        <Alert type="error" message={error} onClose={() => setAlert(null)} />
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard label="Total Productos" value={stats.total} color="blue" />
+        <StatCard
+          label="Activos para Venta"
+          value={stats.activos}
+          color="green"
+        />
+        <StatCard
+          label="Sin Stock Suficiente"
+          value={stats.sinStock}
+          color="red"
+        />
+      </div>
+
+      {/* Alerta de Stock */}
+      {stats.sinStock > 0 && (
+        <Alert
+          type="warning"
+          message={`⚠️ Hay ${stats.sinStock} producto(s) que no se pueden preparar por falta de ingredientes.`}
+        />
+      )}
+
+      {/* Tabla */}
+      <ProductosList
+        productos={productos}
+        loading={loading}
+        onEdit={handleEdit}
+        onRefresh={refresh}
+        onView={handleView}
+        onActivate={handleActivate}
+        onDeactivate={handleDeactivate}
+      />
+
+      {/* Modal */}
+      <ProductoModal
+        isOpen={modalOpen}
+        onClose={closeModal}
+        producto={editingProducto}
+        categorias={categorias}
+        unidadesMedida={unidadesMedida}
+        onSubmit={handleSubmit}
+        loading={operationLoading}
+        serverErrorMessage={formErrorMessage ?? undefined}
+      />
+
+      {/* Vista Previa Modal */}
+      <ProductoPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        producto={previewProducto}
+        isAdmin={true}
+        onEdit={handleEditFromPreview}
+      />
     </div>
   );
 };
+
+// ==================== COMPONENTE AUXILIAR ====================
+
+interface StatCardProps {
+  label: string;
+  value: number;
+  color: "blue" | "green" | "red";
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
+  const colorMap = {
+    blue: "text-blue-600 bg-blue-50",
+    green: "text-green-600 bg-green-50",
+    red: "text-red-600 bg-red-50",
+  };
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+      <div className={`text-3xl font-bold ${colorMap[color]}`}>{value}</div>
+      <div className="text-sm text-gray-600 mt-2">{label}</div>
+    </div>
+  );
+};
+
+export default Productos;

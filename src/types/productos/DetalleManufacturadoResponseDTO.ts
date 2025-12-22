@@ -1,10 +1,39 @@
+/**
+ * DTO para recibir un ingrediente de la receta de un producto manufacturado.
+ */
 export interface DetalleManufacturadoResponseDTO {
-  idDetalleManufacturado?: number;
+  /**
+   * ID del detalle.
+   */
+  idDetalleManufacturado: number;
+
+  /**
+   * Cantidad del insumo requerida.
+   */
   cantidad: number;
 
-  // Información del Insumo
+  /**
+   * ID del ArticuloInsumo (ingrediente).
+   */
   idArticuloInsumo: number;
-  denominacionInsumo?: string;
-  unidadMedidaInsumo?: string;
-  costoInsumo?: number; // precioCompra del insumo
+
+  /**
+   * Denominación del ingrediente.
+   */
+  denominacionInsumo: string;
+
+  /**
+   * Unidad de medida del ingrediente (ej: "g", "ml", "unidad").
+   */
+  unidadMedidaInsumo: string;
+
+  /**
+   * Precio de compra unitario del ingrediente.
+   */
+  precioCompraInsumo: number;
+
+  /**
+   * Costo del ingrediente para esta receta (cantidad * precioCompra del insumo).
+   */
+  subtotal: number;
 }

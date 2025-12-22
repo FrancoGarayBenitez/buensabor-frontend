@@ -7,7 +7,13 @@
  */
 export interface CompraInsumoRequestDTO {
   idArticuloInsumo: number;
-  cantidad: number;
-  precioUnitario: number;
-  // fechaCompra?: Date;  // ✅ Backend genera automáticamente
+
+  // ✅ nuevo modelo (solo paquetes)
+  paquetes: number; // cantidad de paquetes
+  precioPorPaquete: number; // precio de cada paquete
+  unidadContenido: "g" | "kg" | "ml" | "l" | "unidad";
+  contenidoPorPaquete: number; // contenido de un paquete en unidadContenido
+
+  // opcional: fecha (si el backend la acepta, sino la setea automáticamente)
+  fechaCompra?: string; // ISO
 }

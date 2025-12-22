@@ -11,6 +11,7 @@ interface InsumosListProps {
   onEdit: (insumo: ArticuloInsumoResponseDTO) => void;
   onDelete: (id: number) => void;
   onRefresh: () => void;
+  onRefreshInsumoById: (id: number) => void;
 }
 
 const ESTADOS = ["CRITICO", "BAJO", "NORMAL", "ALTO"];
@@ -21,6 +22,7 @@ export const InsumosList: React.FC<InsumosListProps> = ({
   onEdit,
   onDelete,
   onRefresh,
+  onRefreshInsumoById,
 }) => {
   // ==================== ESTADO ====================
 
@@ -293,8 +295,8 @@ export const InsumosList: React.FC<InsumosListProps> = ({
           insumoId={historialInsumoId}
           onClose={() => setHistorialInsumoId(null)}
           onDelete={() => {
-            setHistorialInsumoId(null); // cierra modal tras eliminar
-            onRefresh(); // refresca lista principal
+            // ✅ refresca solo el insumo afectado, NO cierres modal ni actives loading global
+            onRefreshInsumoById(historialInsumoId);
           }}
         />
       )}
@@ -302,7 +304,7 @@ export const InsumosList: React.FC<InsumosListProps> = ({
       {/* Modal: Compra */}
       {compraInsumoId && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-white p-6 rounded-lg w-full max-w-sm shadow-xl max-h-[85vh] overflow-y-auto">
+          <div className="bg-white p-6 rounded-lg w-[95vw] max-w-lg md:max-w-xl lg:max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
             <CompraForm
               insumoId={compraInsumoId}
               onClose={() => setCompraInsumoId(null)}

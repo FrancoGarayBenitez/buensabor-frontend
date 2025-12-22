@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { insumoService } from "../services";
 import type { ArticuloInsumoResponseDTO } from "../types/insumos/ArticuloInsumoResponseDTO";
 import type { ArticuloInsumoRequestDTO } from "../types/insumos/ArticuloInsumoRequestDTO";
@@ -8,9 +8,9 @@ export const useInsumos = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ==================== CRUD ====================
+  // ==================== OBTENCIÓN DE DATOS ====================
 
-  const fetchInsumos = async () => {
+  const fetchInsumos = useCallback(async () => {
     setLoading(true);
     try {
       const data = await insumoService.getAll();
@@ -24,15 +24,16 @@ export const useInsumos = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // ==================== CRUD (CON OPTIMIZACIÓN DE UI) ====================
 
   const createInsumo = async (data: ArticuloInsumoRequestDTO) => {
     setLoading(true);
     try {
-      await insumoService.create(data);
+      const nuevoInsumo = await insumoService.create(data);
+      setInsumos((prev) => [...prev, nuevoInsumo]);
       setError(null);
-      // ✅ Refresh automático
-      await fetchInsumos();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Error al crear insumo";
@@ -46,10 +47,11 @@ export const useInsumos = () => {
   const updateInsumo = async (id: number, data: ArticuloInsumoRequestDTO) => {
     setLoading(true);
     try {
-      await insumoService.update(id, data);
+      const insumoActualizado = await insumoService.update(id, data);
+      setInsumos((prev) =>
+        prev.map((i) => (i.idArticulo === id ? insumoActualizado : i))
+      );
       setError(null);
-      // ✅ Refresh automático
-      await fetchInsumos();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Error al actualizar insumo";
@@ -64,9 +66,10 @@ export const useInsumos = () => {
     setLoading(true);
     try {
       await insumoService.delete(id);
+      setInsumos((prev) =>
+        prev.map((i) => (i.idArticulo === id ? { ...i, eliminado: true } : i))
+      );
       setError(null);
-      // ✅ Refresh automático
-      await fetchInsumos();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Error al eliminar insumo";
@@ -77,7 +80,7 @@ export const useInsumos = () => {
     }
   };
 
-  // ==================== BÚSQUEDAS ====================
+  // ==================== BÚSQUEDAS Y FILTROS (reemplazan el estado) ====================
 
   const getByCategoria = async (idCategoria: number) => {
     setLoading(true);
@@ -111,8 +114,6 @@ export const useInsumos = () => {
       setLoading(false);
     }
   };
-
-  // ==================== FILTROS DE STOCK ====================
 
   const getByCriticoStock = async () => {
     setLoading(true);
@@ -165,74 +166,11 @@ export const useInsumos = () => {
     }
   };
 
-  // ==================== IMÁGENES ====================
+  // ==================== INICIALIZACIÓN Y RECARGA ====================
 
-  const uploadImagen = async (
-    idInsumo: number,
-    file: File,
-    denominacion?: string
-  ) => {
-    try {
-      const result = await insumoService.uploadImagen(
-        idInsumo,
-        file,
-        denominacion
-      );
-      setError(null);
-      return result;
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Error al subir imagen";
-      setError(message);
-      throw err;
-    }
-  };
-
-  const uploadImagenes = async (idInsumo: number, files: File[]) => {
-    try {
-      const results = await insumoService.uploadImagenes(idInsumo, files);
-      setError(null);
-      return results;
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Error al subir imágenes";
-      setError(message);
-      throw err;
-    }
-  };
-
-  const deleteImagen = async (idImagen: number) => {
-    try {
-      const result = await insumoService.deleteImagen(idImagen);
-      setError(null);
-      return result;
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Error al eliminar imagen";
-      setError(message);
-      throw err;
-    }
-  };
-
-  const getImagenes = async (idInsumo: number) => {
-    try {
-      const data = await insumoService.getImagenes(idInsumo);
-      setError(null);
-      return data;
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Error al obtener imágenes";
-      setError(message);
-      throw err;
-    }
-  };
-
-  // ==================== INICIALIZACIÓN ====================
-
-  // ✅ Cargar insumos al montar el componente
   useEffect(() => {
     fetchInsumos();
-  }, []);
+  }, [fetchInsumos]);
 
   const refreshInsumoById = async (id: number) => {
     try {
@@ -250,33 +188,25 @@ export const useInsumos = () => {
   // ==================== RETORNO ====================
 
   return {
-    // ✅ Estado
+    // Estado
     insumos,
     loading,
     error,
 
-    // ✅ CRUD
+    // CRUD
     createInsumo,
     updateInsumo,
     deleteInsumo,
     fetchInsumos,
 
-    // ✅ Búsquedas
+    // Búsquedas y Filtros
     getByCategoria,
     searchByDenominacion,
-
-    // ✅ Filtros de stock
     getByCriticoStock,
     getByBajoStock,
     getByAltoStock,
 
-    // ✅ Imágenes
-    uploadImagen,
-    uploadImagenes,
-    deleteImagen,
-    getImagenes,
-
-    // ✅ Alias para compatibilidad
+    // Recargas
     refresh: fetchInsumos,
     refreshInsumoById,
   };

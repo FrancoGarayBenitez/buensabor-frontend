@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Select } from "../common/Select";
 import { FormField } from "../common/FormFieldProps";
 import { Button } from "../common/Button";
-import { Trash2, Plus, AlertCircle } from "lucide-react";
+import { Trash2, Plus, AlertCircle, ChefHat } from "lucide-react";
 import type { DetalleManufacturadoRequestDTO } from "../../types/productos/DetalleManufacturadoRequestDTO";
 import type { ArticuloInsumoResponseDTO } from "../../types/insumos/ArticuloInsumoResponseDTO";
 
@@ -39,7 +39,6 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
   const handleAgregarIngrediente = () => {
     setError(null);
 
-    // Validaciones
     if (!selectedIngredienteId) {
       setError("Debe seleccionar un ingrediente");
       return;
@@ -71,7 +70,6 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
 
     onDetallesChange([...detalles, nuevoDetalle]);
 
-    // Limpiar formulario
     setSelectedIngredienteId(0);
     setCantidad(0);
     setError(null);
@@ -87,7 +85,6 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
     setError(null);
   };
 
-  // Calcular costo total de ingredientes agregados
   const costoTotal = detalles.reduce((total, detalle) => {
     const insumo = ingredientes.find(
       (ing) => ing.idArticulo === detalle.idArticuloInsumo
@@ -98,7 +95,6 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
     return total;
   }, 0);
 
-  // Información del ingrediente seleccionado
   const cantidadNum = typeof cantidad === "string" ? 0 : cantidad;
   const costoEstimado =
     ingredienteSeleccionado && cantidadNum > 0
@@ -107,24 +103,27 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* FORMULARIO DE AGREGACIÓN */}
-      <div className="border rounded-lg p-4 bg-blue-50">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          ➕ Agregar Ingrediente
-        </h3>
+      {/* CARD DE AGREGACIÓN CON MEJOR UI */}
+      <div className="border-2 border-blue-200 rounded-xl p-5 bg-gradient-to-br from-blue-50 to-blue-100 shadow-sm">
+        <div className="flex items-center gap-3 mb-5">
+          <ChefHat className="w-6 h-6 text-blue-600" />
+          <h3 className="text-lg font-semibold text-blue-900">
+            Agregar Ingrediente a la Receta
+          </h3>
+        </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+          <div className="mb-4 p-3 bg-red-50 border border-red-300 rounded-lg flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-red-700">{error}</div>
+            <div className="text-sm text-red-700 font-medium">{error}</div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           {/* Select de ingredientes */}
-          <div>
+          <div className="md:col-span-2">
             <Select
-              label="Ingrediente"
+              label="🥘 Selecciona el ingrediente"
               name="ingrediente"
               value={selectedIngredienteId}
               onChange={(value) => {
@@ -132,46 +131,35 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
                 setError(null);
               }}
               options={[
-                { value: 0, label: "Seleccione un ingrediente" },
+                { value: 0, label: "-- Selecciona un ingrediente --" },
                 ...ingredientesDisponibles.map((ing) => ({
                   value: ing.idArticulo,
-                  label: `${ing.denominacion} (Stock: ${ing.stockActual} ${ing.denominacionUnidadMedida})`,
+                  label: `${ing.denominacion} (${ing.stockActual} ${ing.denominacionUnidadMedida})`,
                 })),
               ]}
-              placeholder="Seleccione un ingrediente"
               disabled={disabled || ingredientesDisponibles.length === 0}
-              helperText={
-                ingredientesDisponibles.length === 0
-                  ? "No hay ingredientes disponibles"
-                  : undefined
-              }
             />
           </div>
 
           {/* Input de cantidad */}
           <div>
             <FormField
-              label="Cantidad"
+              label="📏 Cantidad"
               name="cantidad"
               type="number"
               value={cantidad}
               onChange={(value) =>
                 handleCantidadChange(value === "" ? "" : Number(value))
               }
-              placeholder="0"
+              placeholder="0.00"
               min={0}
               step={0.01}
               disabled={disabled || !ingredienteSeleccionado}
-              helperText={
-                ingredienteSeleccionado
-                  ? `en ${ingredienteSeleccionado.denominacionUnidadMedida}`
-                  : "Seleccione ingrediente"
-              }
             />
           </div>
 
-          {/* Botón agregar */}
-          <div className="flex flex-col items-stretch justify-end gap-2">
+          {/* Botón agregar alineado al fondo del grid */}
+          <div className="self-end w-full">
             <Button
               type="button"
               onClick={handleAgregarIngrediente}
@@ -181,45 +169,63 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
                 cantidadNum <= 0 ||
                 ingredientesDisponibles.length === 0
               }
-              className="flex items-center justify-center gap-2"
+              className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 w-full"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-5 h-5" />
               Agregar
             </Button>
-
-            {/* Información de costo */}
-            {ingredienteSeleccionado && cantidadNum > 0 && (
-              <div className="text-center text-sm font-medium text-blue-700 bg-white p-2 rounded border border-blue-200">
-                💰 ${costoEstimado.toFixed(2)}
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Fila de ayudas debajo del grid para no afectar la alineación */}
+        <div className="mt-2 flex justify-between text-xs text-gray-600">
+          <span>
+            {ingredientesDisponibles.length === 0
+              ? "❌ No hay ingredientes disponibles"
+              : `✅ ${ingredientesDisponibles.length} disponibles`}
+          </span>
+          <span>
+            {ingredienteSeleccionado
+              ? ingredienteSeleccionado.denominacionUnidadMedida
+              : "Selecciona"}
+          </span>
+        </div>
+
+        {/* Costo estimado - se muestra debajo si hay selección */}
+        {ingredienteSeleccionado && cantidadNum > 0 && (
+          <div className="md:col-span-4">
+            <div className="text-center text-sm font-bold text-green-700 bg-green-50 p-2 rounded-lg border-2 border-green-300">
+              💰 Costo estimado: ${costoEstimado.toFixed(2)}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* LISTA DE INGREDIENTES AGREGADOS */}
+      {/* LISTA DE INGREDIENTES AGREGADOS - MEJOR UI */}
       {detalles.length > 0 ? (
-        <div className="border rounded-lg overflow-hidden shadow-sm">
-          <div className="bg-gray-100 px-4 py-3 border-b">
-            <h3 className="text-lg font-medium text-gray-900">
-              📋 Receta ({detalles.length} ingrediente
-              {detalles.length !== 1 ? "s" : ""})
+        <div className="border-2 border-orange-200 rounded-xl overflow-hidden shadow-md bg-white">
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              📋 Receta
+              <span className="bg-white text-orange-600 px-3 py-1 rounded-full text-sm font-semibold">
+                {detalles.length}
+              </span>
             </h3>
           </div>
 
-          {/* Tabla de ingredientes */}
+          {/* Tabla mejorada */}
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr className="text-sm font-medium text-gray-700">
-                  <th className="px-4 py-3 text-left">Ingrediente</th>
-                  <th className="px-4 py-3 text-center">Cantidad</th>
-                  <th className="px-4 py-3 text-center">Precio Unit.</th>
-                  <th className="px-4 py-3 text-right">Subtotal</th>
-                  <th className="px-4 py-3 text-center">Acción</th>
+              <thead className="bg-orange-50 border-b-2 border-orange-200">
+                <tr className="text-sm font-semibold text-orange-900">
+                  <th className="px-4 py-4 text-left">🥕 Ingrediente</th>
+                  <th className="px-4 py-4 text-center">📊 Cantidad</th>
+                  <th className="px-4 py-4 text-center">💲 Precio Unit.</th>
+                  <th className="px-4 py-4 text-right">💰 Subtotal</th>
+                  <th className="px-4 py-4 text-center">🗑️</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-orange-100">
                 {detalles.map((detalle, index) => {
                   const insumo = ingredientes.find(
                     (ing) => ing.idArticulo === detalle.idArticuloInsumo
@@ -232,10 +238,10 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
                   return (
                     <tr
                       key={`${detalle.idArticuloInsumo}-${index}`}
-                      className="hover:bg-gray-50 transition-colors"
+                      className="hover:bg-orange-50 transition-colors"
                     >
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">
+                      <td className="px-4 py-4">
+                        <div className="font-semibold text-gray-900">
                           {insumo.denominacion}
                         </div>
                         <div className="text-xs text-gray-500">
@@ -243,44 +249,42 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <input
-                            type="number"
-                            value={detalle.cantidad}
-                            onChange={(e) => {
-                              const newDetalles = [...detalles];
-                              newDetalles[index] = {
-                                ...newDetalles[index],
-                                cantidad: Number(e.target.value),
-                              };
-                              onDetallesChange(newDetalles);
-                            }}
-                            min={0.01}
-                            step={0.01}
-                            disabled={disabled}
-                            className="w-20 px-2 py-1 border rounded text-center text-sm"
-                          />
-                        </div>
+                      <td className="px-4 py-4 text-center">
+                        <input
+                          type="number"
+                          value={detalle.cantidad}
+                          onChange={(e) => {
+                            const newDetalles = [...detalles];
+                            newDetalles[index] = {
+                              ...newDetalles[index],
+                              cantidad: Number(e.target.value),
+                            };
+                            onDetallesChange(newDetalles);
+                          }}
+                          min={0.01}
+                          step={0.01}
+                          disabled={disabled}
+                          className="w-24 px-3 py-2 border-2 border-orange-200 rounded-lg text-center text-sm font-semibold focus:border-orange-500 focus:outline-none"
+                        />
                       </td>
 
-                      <td className="px-4 py-3 text-center text-sm text-gray-700">
+                      <td className="px-4 py-4 text-center text-sm font-medium text-gray-700">
                         ${insumo.precioCompra.toFixed(2)}
                       </td>
 
-                      <td className="px-4 py-3 text-right font-medium text-green-600">
+                      <td className="px-4 py-4 text-right text-lg font-bold text-green-600">
                         ${subtotal.toFixed(2)}
                       </td>
 
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-4 text-center">
                         <button
                           type="button"
                           onClick={() => handleEliminarIngrediente(index)}
                           disabled={disabled}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 hover:scale-110"
                           title="Eliminar ingrediente"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-5 h-5" />
                         </button>
                       </td>
                     </tr>
@@ -288,13 +292,13 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
                 })}
               </tbody>
 
-              {/* Pie de tabla con totales */}
+              {/* Pie de tabla con totales - mejorado */}
               <tfoot>
-                <tr className="bg-gray-100 border-t-2 font-semibold text-gray-900">
-                  <td colSpan={3} className="px-4 py-3 text-right">
-                    💰 Costo Total:
+                <tr className="bg-orange-100 border-t-2 border-orange-300 font-bold text-orange-900">
+                  <td colSpan={3} className="px-4 py-4 text-right text-lg">
+                    💰 Costo Total de Ingredientes:
                   </td>
-                  <td className="px-4 py-3 text-right text-xl text-green-600">
+                  <td className="px-4 py-4 text-right text-2xl text-green-600">
                     ${costoTotal.toFixed(2)}
                   </td>
                   <td />
@@ -304,21 +308,21 @@ export const IngredientesSelector: React.FC<IngredientesSelectorProps> = ({
           </div>
         </div>
       ) : (
-        /* Estado vacío */
-        <div className="border rounded-lg p-8 text-center bg-gray-50">
-          <div className="text-5xl mb-3">🥘</div>
-          <p className="text-lg font-medium text-gray-700">
-            No se han agregado ingredientes
+        /* Estado vacío mejorado */
+        <div className="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center bg-gray-50">
+          <div className="text-6xl mb-4">🍽️</div>
+          <p className="text-xl font-semibold text-gray-800">
+            Tu receta está vacía
           </p>
-          <p className="text-sm text-gray-500 mt-1">
-            Agregue al menos un ingrediente para crear la receta del producto
+          <p className="text-sm text-gray-600 mt-2">
+            Comienza agregando ingredientes usando el selector de arriba
           </p>
         </div>
       )}
 
-      {/* Informacion de ingredientes disponibles */}
+      {/* Información complementaria */}
       {ingredientesDisponibles.length === 0 && detalles.length > 0 && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+        <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg text-sm text-blue-700 font-medium">
           ℹ️ Todos los ingredientes disponibles han sido agregados a la receta.
         </div>
       )}

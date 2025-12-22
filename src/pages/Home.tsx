@@ -30,7 +30,7 @@ import { UserDeactivatedAlert } from "../components/common/UserDeactivatedAlert"
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
-  const { productos, loading, getProductosDestacados } = useCatalogoProductos();
+  const { productos, loading } = useCatalogoProductos();
 
   const [carritoAbierto, setCarritoAbierto] = useState(false);
   const [productoDetalle, setProductoDetalle] =
@@ -42,14 +42,6 @@ const Home: React.FC = () => {
   const { cargarPromocionesParaItem, getPromocionesDisponibles } =
     useCarritoPromociones();
 
-  // Productos destacados usando useMemo para evitar recálculos innecesarios
-  const featuredProducts = useMemo(() => {
-    if (productos.length > 0) {
-      return getProductosDestacados(6);
-    }
-    return [];
-  }, [productos, getProductosDestacados]);
-
   // Imagen producto
   const getProductImage = (producto: ProductoCatalogo) =>
     producto.imagenes && producto.imagenes.length > 0
@@ -57,7 +49,8 @@ const Home: React.FC = () => {
       : null;
 
   // Color por categoría
-  const getCategoryColor = (categoriaId: number) => {
+  const getCategoryColor = (categoriaId: number | undefined) => {
+    const id = categoriaId || 0;
     const colors = [
       "from-orange-100 to-orange-200",
       "from-blue-100 to-blue-200",
@@ -66,19 +59,7 @@ const Home: React.FC = () => {
       "from-red-100 to-red-200",
       "from-yellow-100 to-yellow-200",
     ];
-    return colors[categoriaId % colors.length];
-  };
-
-  // Rating (solo para manufacturados, para insumos usar un valor fijo)
-  const getProductRating = (producto: ProductoCatalogo) => {
-    if (producto.tipo === "insumo") return 4.5;
-
-    const cantidadVendida = producto.cantidadVendida;
-    if (cantidadVendida >= 100) return 4.9;
-    if (cantidadVendida >= 50) return 4.7;
-    if (cantidadVendida >= 20) return 4.5;
-    if (cantidadVendida >= 10) return 4.3;
-    return 4.0;
+    return colors[id % colors.length];
   };
 
   // ✅ ACTUALIZADO: Agregar producto al carrito usando Context Unificado
@@ -206,201 +187,6 @@ const Home: React.FC = () => {
               Comidas preparadas con amor y productos frescos de calidad premium
             </p>
           </div>
-
-          {loading ? (
-            <div className="grid md:grid-cols-3 gap-8">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  className="bg-white rounded-2xl shadow-lg overflow-hidden animate-pulse"
-                >
-                  <div className="h-48 bg-gray-200"></div>
-                  <div className="p-6">
-                    <div className="h-6 bg-gray-200 rounded mb-2"></div>
-                    <div className="h-4 bg-gray-200 rounded mb-4"></div>
-                    <div className="flex justify-between">
-                      <div className="h-8 w-20 bg-gray-200 rounded"></div>
-                      <div className="h-8 w-16 bg-gray-200 rounded"></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : featuredProducts.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">
-                No hay productos disponibles en este momento
-              </p>
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-3 gap-8">
-              {featuredProducts.map((producto) => {
-                const imagenUrl = getProductImage(producto);
-                const rating = getProductRating(producto);
-                // ✅ ACTUALIZADO: Obtener info de promociones
-                const promocionInfo = getPromocionInfo(producto);
-
-                return (
-                  <div
-                    key={`${producto.tipo}-${producto.id}`}
-                    className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 relative"
-                  >
-                    {/* ✅ Badge de promoción */}
-                    {promocionInfo && (
-                      <div className="absolute top-2 left-2 z-10">
-                        <div className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center">
-                          <Tag className="w-3 h-3 mr-1" />
-                          {promocionInfo.textoDescuento}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="h-48 relative overflow-hidden">
-                      {imagenUrl ? (
-                        <img
-                          src={imagenUrl}
-                          alt={producto.denominacion}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            e.currentTarget.nextElementSibling?.classList.remove(
-                              "hidden"
-                            );
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className={`${
-                          imagenUrl ? "hidden" : ""
-                        } w-full h-full bg-gradient-to-br ${getCategoryColor(
-                          producto.categoria.idCategoria
-                        )} flex items-center justify-center`}
-                      >
-                        <div className="text-center p-8">
-                          <div className="w-16 h-16 bg-[#CD6C50] rounded-full flex items-center justify-center mx-auto mb-4">
-                            <span className="text-white text-2xl">
-                              {getProductIcon(producto)}
-                            </span>
-                          </div>
-                          <p className="text-gray-600 text-sm">
-                            {producto.categoria.denominacion}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="absolute top-3 right-3">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            producto.stockSuficiente
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {producto.stockSuficiente ? "Disponible" : "Agotado"}
-                        </span>
-                      </div>
-
-                      {/* Badge de tipo de producto */}
-                      {!promocionInfo && (
-                        <div className="absolute top-3 left-3">
-                          <span
-                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              producto.tipo === "manufacturado"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-purple-100 text-purple-800"
-                            }`}
-                          >
-                            {producto.tipo === "manufacturado"
-                              ? "Preparado"
-                              : "Producto"}
-                          </span>
-                        </div>
-                      )}
-
-                      {producto.tiempoEstimadoEnMinutos && (
-                        <div className="absolute bottom-3 left-3">
-                          <div className="bg-black bg-opacity-70 text-white px-2 py-1 rounded-lg text-sm flex items-center">
-                            <Clock className="w-3 h-3 mr-1" />
-                            {producto.tiempoEstimadoEnMinutos} min
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xl font-semibold text-gray-800 truncate">
-                          {producto.denominacion}
-                        </h3>
-                        <div className="flex items-center">
-                          <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                          <span className="text-sm text-gray-600 ml-1">
-                            {rating}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-gray-600 mb-4 text-sm line-clamp-2">
-                        {producto.descripcion ||
-                          `${producto.denominacion} de excelente calidad`}
-                      </p>
-                      <div className="flex items-center text-xs text-gray-500 mb-4">
-                        <span className="bg-gray-100 px-2 py-1 rounded">
-                          {producto.categoria.denominacion}
-                        </span>
-                        {producto.tipo === "manufacturado" && (
-                          <span className="ml-2">
-                            {producto.cantidadVendida} vendidos
-                          </span>
-                        )}
-                        {producto.tipo === "insumo" && (
-                          <span className="ml-2">
-                            Stock: {producto.stockActual}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        {/* ✅ Mostrar precio con y sin promoción */}
-                        <div className="flex flex-col">
-                          {promocionInfo ? (
-                            <>
-                              <span className="text-sm text-gray-500 line-through">
-                                ${producto.precioVenta.toFixed(0)}
-                              </span>
-                              <span className="text-2xl font-bold text-[#CD6C50]">
-                                ${promocionInfo.precioConDescuento.toFixed(0)}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-2xl font-bold text-[#CD6C50]">
-                              ${producto.precioVenta.toFixed(0)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleOrderClick(producto)}
-                            disabled={!producto.stockSuficiente}
-                            className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
-                              producto.stockSuficiente
-                                ? "bg-[#CD6C50] text-white hover:bg-[#b85a42]"
-                                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                            }`}
-                          >
-                            {producto.stockSuficiente ? "Pedir" : "Agotado"}
-                          </button>
-                          <button
-                            onClick={() => handleDetalleClick(producto)}
-                            className="px-4 py-2 rounded-lg border border-[#CD6C50] text-[#CD6C50] font-semibold hover:bg-[#f5ebe8] transition-colors duration-200"
-                          >
-                            Detalle
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </section>
 

@@ -4,8 +4,13 @@ import type {
   HistoricoPrecioStatsDTO,
   PrecioVentaSugeridoDTO,
 } from "../../types/insumos/HistoricoPrecioDTO";
+import type { ArticuloInsumoResponseDTO } from "../../types/insumos/ArticuloInsumoResponseDTO";
 import { Button } from "../common/Index";
-import { compraService, historicoPrecioService } from "../../services";
+import {
+  compraService,
+  historicoPrecioService,
+  insumoService,
+} from "../../services";
 
 interface Props {
   insumoId: number;
@@ -18,93 +23,129 @@ export const HistorialPrecios: React.FC<Props> = ({
   onClose,
   onDelete,
 }) => {
+  const [insumo, setInsumo] = useState<ArticuloInsumoResponseDTO | null>(null);
   const [historial, setHistorial] = useState<HistoricoPrecioDTO[]>([]);
   const [estadisticas, setEstadisticas] =
     useState<HistoricoPrecioStatsDTO | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // 🔹 separar cargas: init vs sugerido
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [loadingSugerido, setLoadingSugerido] = useState(false);
+
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [margenGanancia, setMargenGanancia] = useState<number>(1.2);
   const [precioVentaSugerido, setPrecioVentaSugerido] =
     useState<PrecioVentaSugeridoDTO | null>(null);
 
-  // ✅ Cargar datos al montar o cuando cambia el margen
+  // ✅ Cargar insumo + historial + estadísticas (solo al iniciar o cambiar insumoId)
   useEffect(() => {
-    const t = setTimeout(() => {
-      const fetchData = async () => {
-        try {
-          const [hist, stats, precioSug] = await Promise.all([
-            historicoPrecioService.getHistorial(insumoId),
-            historicoPrecioService.getEstadisticas(insumoId),
-            historicoPrecioService.getPrecioVentaSugerido(
-              insumoId,
-              margenGanancia
-            ),
-          ]);
-          setHistorial(hist);
-          setEstadisticas(stats);
-          setPrecioVentaSugerido(precioSug);
-          setError(null);
-        } catch (error) {
-          setError("Error cargando datos.");
-          console.error("❌ Error:", error);
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchData();
-    }, 250);
-    return () => clearTimeout(t);
-  }, [insumoId, margenGanancia]);
+    let mounted = true;
+    setLoadingInit(true);
 
-  // ✅ Eliminar compra individual - USANDO COMPRA SERVICE
+    (async () => {
+      try {
+        const data = await insumoService.getById(insumoId);
+        if (!mounted) return;
+        setInsumo(data);
+
+        const [hist, stats] = await Promise.all([
+          historicoPrecioService.getHistorial(insumoId),
+          historicoPrecioService.getEstadisticas(insumoId),
+        ]);
+        if (!mounted) return;
+
+        setHistorial(hist);
+        setEstadisticas(stats);
+        setError(null);
+      } catch (err) {
+        if (mounted) {
+          setError("Error cargando datos.");
+          console.error("❌ Error:", err);
+        }
+      } finally {
+        if (mounted) setLoadingInit(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [insumoId]);
+
+  const mostrarVenta = !!insumo && insumo.esParaElaborar === false;
+
+  // ✅ Calcular precio sugerido sin “flash” (no activar overlay completo)
+  useEffect(() => {
+    let active = true;
+    if (!mostrarVenta) {
+      setPrecioVentaSugerido(null);
+      return;
+    }
+    setLoadingSugerido(true);
+
+    historicoPrecioService
+      .getPrecioVentaSugerido(insumoId, margenGanancia)
+      .then((precioSug) => {
+        if (!active) return;
+        setPrecioVentaSugerido(precioSug);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error("❌ Error precio sugerido:", err);
+      })
+      .finally(() => {
+        if (active) setLoadingSugerido(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [insumoId, margenGanancia, mostrarVenta]);
+
+  // ✅ Eliminar compra: mantener modal abierto y refrescar datos sin overlay
   const handleEliminarCompra = async (item: HistoricoPrecioDTO) => {
-    // ✅ Validar que existe idCompra
     if (!item.idCompra) {
       setError("Error: No se encontró el ID de la compra");
       console.error("❌ idCompra es undefined para item:", item);
       return;
     }
-
     const confirmacion = window.confirm(
-      `¿Está seguro de que desea eliminar esta compra?\n\n` +
+      `¿Está seguro de eliminar esta compra?\n\n` +
         `Fecha: ${new Date(item.fecha).toLocaleDateString("es-AR")}\n` +
         `Precio: $${item.precioUnitario.toFixed(2)}\n` +
         `Cantidad: ${item.cantidad}\n\n` +
         `Esta acción no se puede deshacer.`
     );
-
     if (!confirmacion) return;
 
     setDeletingId(item.idCompra);
-
     try {
-      console.log(`🗑️ Eliminando compra ${item.idCompra}`);
+      await compraService.deleteCompra(item.idCompra);
 
-      // ✅ Llamar a compraService.deleteCompra() en lugar de historico
-      const response = await compraService.deleteCompra(item.idCompra);
-      console.log("✅ Respuesta del servidor:", response);
-
-      // ✅ Actualizar tabla local con función para evitar estado desfasado
-      setHistorial((prev) =>
-        prev.filter((c) => c.idHistoricoPrecio !== item.idHistoricoPrecio)
-      );
-
-      // ✅ Refrescar datos (historial, estadísticas, precio sugerido)
-      const [hist, stats, precioSug] = await Promise.all([
+      // refrescar sin overlay global
+      const [hist, stats] = await Promise.all([
         historicoPrecioService.getHistorial(insumoId),
         historicoPrecioService.getEstadisticas(insumoId),
-        historicoPrecioService.getPrecioVentaSugerido(insumoId, margenGanancia),
       ]);
-
       setHistorial(hist);
       setEstadisticas(stats);
-      setPrecioVentaSugerido(precioSug);
 
-      console.log("✅ Compra eliminada exitosamente");
+      // recalcular sugerido si aplica
+      if (mostrarVenta) {
+        setLoadingSugerido(true);
+        try {
+          const precioSug = await historicoPrecioService.getPrecioVentaSugerido(
+            insumoId,
+            margenGanancia
+          );
+          setPrecioVentaSugerido(precioSug);
+        } finally {
+          setLoadingSugerido(false);
+        }
+      }
 
-      // ✅ Notificar al padre si es necesario
-      if (onDelete) onDelete();
+      onDelete?.();
     } catch (err) {
       setError("Error al eliminar la compra");
       console.error("❌ Error:", err);
@@ -113,7 +154,7 @@ export const HistorialPrecios: React.FC<Props> = ({
     }
   };
 
-  if (loading) {
+  if (loadingInit) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
         <div className="bg-white p-6 rounded-xl shadow-2xl">
@@ -123,27 +164,40 @@ export const HistorialPrecios: React.FC<Props> = ({
     );
   }
 
-  // ✅ Calcular total invertido (costo de compra)
   const totalInvertido = historial.reduce(
     (acc, c) => acc + c.precioUnitario * (c.cantidad || 1),
     0
   );
-
-  // ✅ Total de unidades compradas
   const totalCantidadComprada = historial.reduce(
     (acc, c) => acc + (c.cantidad || 0),
     0
   );
-
-  // ✅ Promedio ponderado (coincide con la lista de insumos)
   const precioPromedioPonderado =
     totalCantidadComprada > 0 ? totalInvertido / totalCantidadComprada : 0;
 
-  // ✅ Calcular ganancia potencial si se vende todo
-  const gananciaTotal = precioVentaSugerido
-    ? precioVentaSugerido.gananciaUnitaria *
-      historial.reduce((acc, c) => acc + (c.cantidad || 1), 0)
-    : 0;
+  const base =
+    (insumo?.denominacionUnidadMedida || "").toLowerCase() === "g"
+      ? "g"
+      : (insumo?.denominacionUnidadMedida || "").toLowerCase() === "ml"
+      ? "ml"
+      : "unidad";
+
+  const nfCantidad = new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: base === "unidad" ? 0 : 0,
+    maximumFractionDigits: base === "unidad" ? 0 : 2,
+  });
+  const nfPrecio = new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: base === "unidad" ? 2 : 0,
+    maximumFractionDigits: base === "unidad" ? 2 : 4,
+  });
+  const nfTotal = new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -172,35 +226,35 @@ export const HistorialPrecios: React.FC<Props> = ({
           </p>
         ) : (
           <>
-            {/* ✅ Margen de ganancia slider */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-              <label className="block text-sm font-medium text-amber-900 mb-2">
-                💰 Margen de Ganancia
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min="1"
-                  max="3"
-                  step="0.1"
-                  value={margenGanancia}
-                  onChange={(e) =>
-                    setMargenGanancia(parseFloat(e.target.value))
-                  }
-                  className="flex-1 h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <span className="font-bold text-amber-900 min-w-fit text-lg">
-                  +{((margenGanancia - 1) * 100).toFixed(0)}%
-                </span>
+            {/* ✅ Slider de ganancia solo si NO es para elaborar */}
+            {mostrarVenta && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <label className="block text-sm font-medium text-amber-900 mb-2">
+                  💰 Margen de Ganancia
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.1"
+                    value={margenGanancia}
+                    onChange={(e) =>
+                      setMargenGanancia(parseFloat(e.target.value))
+                    }
+                    className="flex-1 h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <span className="font-bold text-amber-900 min-w-fit text-lg">
+                    +{((margenGanancia - 1) * 100).toFixed(0)}%
+                  </span>
+                </div>
+                {loadingSugerido && (
+                  <p className="text-xs text-amber-700 mt-2">
+                    Calculando precio sugerido...
+                  </p>
+                )}
               </div>
-              <p className="text-xs text-amber-700 mt-2">
-                {margenGanancia === 1
-                  ? "Sin ganancia (vender a precio de costo)"
-                  : `Ganancia estimada: +${((margenGanancia - 1) * 100).toFixed(
-                      0
-                    )}%`}
-              </p>
-            </div>
+            )}
 
             {/* ✅ Estadísticas */}
             {estadisticas && estadisticas.totalRegistros > 0 && (
@@ -217,16 +271,15 @@ export const HistorialPrecios: React.FC<Props> = ({
                     Precio Promedio (ponderado)
                   </p>
                   <p className="text-xl font-bold text-gray-700">
-                    ${precioPromedioPonderado.toFixed(2)}
+                    {nfPrecio.format(precioPromedioPonderado)}
                   </p>
-                  {/* Mostrar referencia del promedio simple si difiere */}
                   {Math.abs(
                     (estadisticas?.precioPromedio ?? 0) -
                       precioPromedioPonderado
                   ) > 0.009 && (
                     <p className="text-[11px] text-gray-500 mt-1">
-                      Promedio simple: $
-                      {estadisticas!.precioPromedio.toFixed(2)}
+                      Promedio simple:{" "}
+                      {nfPrecio.format(estadisticas!.precioPromedio)}
                     </p>
                   )}
                 </div>
@@ -234,19 +287,21 @@ export const HistorialPrecios: React.FC<Props> = ({
                 <div className="text-center">
                   <p className="text-sm text-gray-600">Total Invertido</p>
                   <p className="text-xl font-bold text-purple-600">
-                    ${totalInvertido.toFixed(2)}
+                    {nfTotal.format(totalInvertido)}
                   </p>
                 </div>
 
                 <div className="text-center">
                   <p className="text-sm text-gray-600">Min - Max</p>
                   <p className="text-sm font-mono text-gray-700">
-                    ${estadisticas.precioMinimo.toFixed(2)} - $
-                    {estadisticas.precioMaximo.toFixed(2)}
+                    {nfPrecio.format(estadisticas.precioMinimo)} -{" "}
+                    {nfPrecio.format(estadisticas.precioMaximo)}
                   </p>
                 </div>
 
-                {precioVentaSugerido &&
+                {/* ✅ Sección de venta solo si NO es para elaborar */}
+                {mostrarVenta &&
+                  precioVentaSugerido &&
                   precioVentaSugerido.precioVentaSugerido > 0 && (
                     <>
                       <div className="text-center bg-green-100 rounded-lg p-2">
@@ -254,27 +309,20 @@ export const HistorialPrecios: React.FC<Props> = ({
                           Precio Venta Sugerido
                         </p>
                         <p className="text-xl font-bold text-green-700">
-                          ${precioVentaSugerido.precioVentaSugerido.toFixed(2)}
+                          {nfPrecio.format(
+                            precioVentaSugerido.precioVentaSugerido
+                          )}
                         </p>
                       </div>
 
                       <div className="text-center bg-green-100 rounded-lg p-2">
                         <p className="text-sm text-gray-600">Ganancia/Unidad</p>
                         <p className="text-xl font-bold text-green-700">
-                          ${precioVentaSugerido.gananciaUnitaria.toFixed(2)}
+                          {nfPrecio.format(
+                            precioVentaSugerido.gananciaUnitaria
+                          )}
                         </p>
                       </div>
-
-                      {gananciaTotal > 0 && (
-                        <div className="text-center bg-emerald-100 rounded-lg p-2 md:col-span-1">
-                          <p className="text-sm text-gray-600">
-                            Ganancia Total
-                          </p>
-                          <p className="text-xl font-bold text-emerald-700">
-                            ${gananciaTotal.toFixed(2)}
-                          </p>
-                        </div>
-                      )}
                     </>
                   )}
               </div>
@@ -287,7 +335,9 @@ export const HistorialPrecios: React.FC<Props> = ({
                   <tr>
                     <th className="px-4 py-2 text-left">Fecha</th>
                     <th className="px-4 py-2 text-right">Cantidad</th>
-                    <th className="px-4 py-2 text-right">Precio Compra</th>
+                    <th className="px-4 py-2 text-right">
+                      Precio Compra{base !== "unidad" ? ` ($/${base})` : ""}
+                    </th>
                     <th className="px-4 py-2 text-right">Total Compra</th>
                     <th className="px-4 py-2 text-center">Acción</th>
                   </tr>
@@ -302,15 +352,16 @@ export const HistorialPrecios: React.FC<Props> = ({
                         {new Date(item.fecha).toLocaleDateString("es-AR")}
                       </td>
                       <td className="px-4 py-2 text-right text-gray-600">
-                        {item.cantidad?.toFixed(2) || "-"}
+                        {item.cantidad != null
+                          ? nfCantidad.format(item.cantidad)
+                          : "-"}
                       </td>
                       <td className="px-4 py-2 text-right font-semibold text-gray-800">
-                        ${item.precioUnitario.toFixed(2)}
+                        {nfPrecio.format(item.precioUnitario)}
                       </td>
                       <td className="px-4 py-2 text-right font-bold text-gray-900">
-                        $
-                        {(item.precioUnitario * (item.cantidad || 1)).toFixed(
-                          2
+                        {nfTotal.format(
+                          item.precioUnitario * (item.cantidad || 1)
                         )}
                       </td>
                       <td className="px-4 py-2 text-center">
@@ -333,7 +384,6 @@ export const HistorialPrecios: React.FC<Props> = ({
               </table>
             </div>
 
-            {/* ✅ Nota importante */}
             <div className="text-xs text-gray-600 bg-yellow-50 p-3 rounded border border-yellow-200">
               💡 <strong>Nota:</strong> Puedes eliminar compras individuales sin
               afectar el resto. El ingrediente NO se eliminará.

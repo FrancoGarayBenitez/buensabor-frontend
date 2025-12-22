@@ -1,37 +1,63 @@
-import type { ImagenDTO } from "../common/ImagenDTO";
-import type { DetalleManufacturadoResponseDTO } from "./DetalleManufacturadoResponseDTO.ts";
+import type { TipoCategoria } from "../categorias/TipoCategoria";
+import type { ImagenDTO } from "../common";
+import type { DetalleManufacturadoResponseDTO } from "./DetalleManufacturadoResponseDTO";
 
+/**
+ * DTO para recibir un producto manufacturado desde el backend.
+ */
 export interface ArticuloManufacturadoResponseDTO {
-  // Campos heredados de Articulo
+  // Datos del artículo
   idArticulo: number;
   denominacion: string;
   precioVenta: number;
   eliminado: boolean;
 
-  // Información de Unidad de Medida
+  // Unidad de medida
   idUnidadMedida: number;
   denominacionUnidadMedida: string;
 
-  // Información de Categoría
+  // Categoría
   idCategoria: number;
   denominacionCategoria: string;
-  esSubcategoria?: boolean;
+  esSubcategoria: boolean;
   denominacionCategoriaPadre?: string;
+  tipoCategoria: TipoCategoria;
 
-  // Campos específicos de ArticuloManufacturado
-  descripcion?: string;
+  // Datos del manufacturado
+  descripcion: string;
+  preparacion: string;
   tiempoEstimadoEnMinutos: number;
-  preparacion?: string;
-  margenGanancia: number;
-  costoProduccion: number;
 
-  // Detalles de la receta (USAR RESPONSE)
+  // Receta
   detalles: DetalleManufacturadoResponseDTO[];
 
   // Imágenes
-  imagenes?: ImagenDTO[];
+  imagenes: ImagenDTO[];
 
-  // Información calculada (viene del backend)
+  // --- CAMPOS CALCULADOS Y DE NEGOCIO ---
+
+  /**
+   * Costo total de los ingredientes.
+   */
+  costoProduccion: number;
+
+  /**
+   * Margen de ganancia como multiplicador (ej: 1.3).
+   */
+  margenGanancia: number;
+
+  /**
+   * Margen de ganancia como porcentaje (ej: 30.0).
+   */
+  margenGananciaPorcentaje: number;
+
+  /**
+   * Indica si hay stock suficiente de todos los ingredientes para preparar al menos una unidad.
+   */
   stockSuficiente: boolean;
+
+  /**
+   * Cantidad máxima de unidades que se pueden preparar con el stock actual de ingredientes.
+   */
   cantidadMaximaPreparable: number;
 }

@@ -1,22 +1,35 @@
-import type { ImagenDTO } from "../common/ImagenDTO";
-import type { DetalleManufacturadoRequestDTO } from "./DetalleManufacturadoRequestDTO.ts";
+import type { ImagenDTO } from "../common";
+import type { DetalleManufacturadoRequestDTO } from "./DetalleManufacturadoRequestDTO";
 
+/**
+ * DTO para crear o actualizar un producto manufacturado.
+ */
 export interface ArticuloManufacturadoRequestDTO {
-  // Campos heredados de Articulo
   denominacion: string;
-  precioVenta: number;
   idUnidadMedida: number;
   idCategoria: number;
-
-  // Campos específicos de ArticuloManufacturado
-  descripcion?: string;
-  tiempoEstimadoEnMinutos: number;
+  descripcion: string;
   preparacion: string;
-  margenGanancia: number;
+  tiempoEstimadoEnMinutos: number;
 
-  // Detalles de la receta
+  /**
+   * Margen de ganancia en formato de porcentaje (ej: 30 para un 30%).
+   */
+  margenGananciaPorcentaje: number;
+
+  /**
+   * El precio de venta es opcional. Si no se envía, el backend lo calcula
+   * usando el costo de producción y el margen de ganancia.
+   */
+  precioVenta?: number;
+
+  /**
+   * Lista de ingredientes que componen la receta.
+   */
   detalles: DetalleManufacturadoRequestDTO[];
 
-  // Imágenes (opcional)
+  /**
+   * Lista de imágenes asociadas al producto.
+   */
   imagenes?: ImagenDTO[];
 }

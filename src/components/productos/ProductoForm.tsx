@@ -1,493 +1,436 @@
-import React, { useState, useEffect } from "react";
-import type { ArticuloManufacturadoRequestDTO } from "../../types/productos/ArticuloManufacturadoRequestDTO";
-import type { ArticuloManufacturadoResponseDTO } from "../../types/productos/ArticuloManufacturadoResponseDTO";
-import type { ArticuloInsumoResponseDTO } from "../../types/insumos/ArticuloInsumoResponseDTO";
-import type { CategoriaResponseDTO } from "../../types/categorias/CategoriaResponseDTO";
-import type { ImagenDTO } from "../../types/common/ImagenDTO";
+import React, { useEffect, useMemo } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+import { Button } from "../common/Button";
 import { FormField } from "../common/FormFieldProps";
 import { Select } from "../common/Select";
-import { Button } from "../common/Button";
-import { ImageUpload } from "../common/ImageUpload";
-import { Alert } from "../common/Alert";
-import { IngredientesSelector } from "./IngredientesSelector";
-import type { UnidadMedidaDTO } from "../../services";
 import { CategoriaSelector } from "../common/CategoriaSelector";
-import { IMAGE_CONFIG } from "../../config/imageConfig";
+import { ImageUpload } from "../common/ImageUpload";
+import { IngredientesSelector } from "./IngredientesSelector";
+import { Alert } from "../common/Alert";
+
+import { useInsumos } from "../../hooks/useInsumos";
+import type { ArticuloManufacturadoRequestDTO } from "../../types/productos/ArticuloManufacturadoRequestDTO";
+import type { ArticuloManufacturadoResponseDTO } from "../../types/productos/ArticuloManufacturadoResponseDTO";
+import type { CategoriaResponseDTO } from "../../types/categorias/CategoriaResponseDTO";
+import type { DetalleManufacturadoRequestDTO } from "../../types/productos/DetalleManufacturadoRequestDTO";
+import type { UnidadMedidaDTO } from "../../services";
+
+// ==================== ESQUEMA DE VALIDACIÓN ====================
+
+const schema = z.object({
+  denominacion: z.string().min(1, "La denominación es requerida"),
+  descripcion: z.string().min(1, "La descripción es requerida"),
+  idCategoria: z.number().min(1, "La categoría es requerida"),
+  idUnidadMedida: z.number().min(1, "La unidad de medida es requerida"),
+  tiempoEstimadoEnMinutos: z.number().min(1, "El tiempo debe ser mayor a 0"),
+  preparacion: z.string().min(1, "La preparación es requerida"),
+  margenGananciaPorcentaje: z
+    .number()
+    .min(0, "El margen no puede ser negativo"),
+  precioVenta: z.number().optional(),
+  detalles: z
+    .array(
+      z.object({
+        idArticuloInsumo: z.number(),
+        cantidad: z.number(),
+      })
+    )
+    .min(1, "La receta debe tener al menos un ingrediente"),
+  imagenes: z.array(z.any()).optional(),
+});
+
+// ==================== PROPS DEL COMPONENTE ====================
 
 interface ProductoFormProps {
   producto?: ArticuloManufacturadoResponseDTO;
   categorias: CategoriaResponseDTO[];
   unidadesMedida: UnidadMedidaDTO[];
-  ingredientes: ArticuloInsumoResponseDTO[];
-  onSubmit: (
-    data: ArticuloManufacturadoRequestDTO
-  ) => Promise<ArticuloManufacturadoResponseDTO | void>;
+  onSubmit: (data: ArticuloManufacturadoRequestDTO) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
+  serverErrorMessage?: string;
 }
+
+// ==================== COMPONENTE PRINCIPAL ====================
 
 export const ProductoForm: React.FC<ProductoFormProps> = ({
   producto,
   categorias,
   unidadesMedida,
-  ingredientes,
   onSubmit,
   onCancel,
   loading = false,
+  serverErrorMessage,
 }) => {
-  const [formData, setFormData] = useState<ArticuloManufacturadoRequestDTO>({
-    denominacion: "",
-    idUnidadMedida: 0,
-    idCategoria: 0,
-    descripcion: "",
-    tiempoEstimadoEnMinutos: 0,
-    preparacion: "",
-    precioVenta: 0,
-    margenGanancia: 2.5,
-    detalles: [],
-    imagenes: [],
+  const isCreating = !producto;
+  const { insumos, loading: loadingInsumos } = useInsumos();
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+    setError, // ✅ para marcar el campo con error de servidor
+  } = useForm<ArticuloManufacturadoRequestDTO>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      denominacion: "",
+      descripcion: "",
+      idCategoria: 0,
+      idUnidadMedida: 0,
+      tiempoEstimadoEnMinutos: 0,
+      preparacion: "",
+      margenGananciaPorcentaje: 30, // Default 30%
+      precioVenta: 0,
+      detalles: [],
+      imagenes: [],
+    },
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [usarMargenAutomatico, setUsarMargenAutomatico] = useState(true);
-  const [alert, setAlert] = useState<{
-    type: "success" | "error" | "warning" | "info";
-    message: string;
-  } | null>(null);
+  // ==================== EFECTOS ====================
 
-  // Cargar datos si es edición
   useEffect(() => {
     if (producto) {
-      setFormData({
-        denominacion: producto.denominacion,
-        idUnidadMedida: producto.idUnidadMedida,
-        idCategoria: producto.idCategoria,
-        descripcion: producto.descripcion || "",
-        tiempoEstimadoEnMinutos: producto.tiempoEstimadoEnMinutos,
-        preparacion: producto.preparacion || "",
-        precioVenta: producto.precioVenta,
-        margenGanancia: producto.margenGanancia || 2.5,
-        detalles: producto.detalles || [],
-        imagenes: producto.imagenes || [],
-      });
-      setUsarMargenAutomatico(false);
+      setValue("denominacion", producto.denominacion);
+      setValue("descripcion", producto.descripcion);
+      setValue("idCategoria", producto.idCategoria);
+      setValue("idUnidadMedida", producto.idUnidadMedida);
+      setValue("tiempoEstimadoEnMinutos", producto.tiempoEstimadoEnMinutos);
+      setValue("preparacion", producto.preparacion);
+      setValue("margenGananciaPorcentaje", producto.margenGananciaPorcentaje);
+      setValue("precioVenta", producto.precioVenta);
+      setValue(
+        "detalles",
+        producto.detalles.map((d) => ({
+          idArticuloInsumo: d.idArticuloInsumo,
+          cantidad: d.cantidad,
+        }))
+      );
+      setValue("imagenes", producto.imagenes);
     }
-  }, [producto]);
+  }, [producto, setValue]);
 
-  // Calcular precio automático cuando cambian ingredientes o margen
+  // ✅ marcar el campo 'denominacion' y mostrar alerta si hay error del backend
   useEffect(() => {
-    if (usarMargenAutomatico && formData.detalles.length > 0) {
-      const costoTotal = formData.detalles.reduce((total, detalle) => {
-        const insumo = ingredientes.find(
-          (ing) => ing.idArticulo === detalle.idArticuloInsumo
+    if (serverErrorMessage && serverErrorMessage.trim().length > 0) {
+      setError("denominacion", { type: "server", message: serverErrorMessage });
+    }
+  }, [serverErrorMessage, setError]);
+
+  // ==================== CÁLCULOS DE COSTO Y PRECIO ====================
+
+  const detalles = watch("detalles");
+  const margen = watch("margenGananciaPorcentaje");
+
+  const costoProduccion = useMemo(() => {
+    // ✅ CORRECCIÓN: Tipos explícitos para los parámetros de reduce
+    return detalles.reduce(
+      (total: number, detalle: DetalleManufacturadoRequestDTO) => {
+        const insumo = insumos.find(
+          (i) => i.idArticulo === detalle.idArticuloInsumo
         );
-        return total + (insumo ? detalle.cantidad * insumo.precioCompra : 0);
-      }, 0);
-      const precioCalculado = costoTotal * formData.margenGanancia;
-      setFormData((prev) => ({ ...prev, precioVenta: precioCalculado }));
-    }
-  }, [
-    formData.detalles,
-    formData.margenGanancia,
-    usarMargenAutomatico,
-    ingredientes,
-  ]);
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.denominacion.trim()) {
-      newErrors.denominacion = "La denominación es obligatoria";
-    }
-
-    if (!formData.idUnidadMedida) {
-      newErrors.idUnidadMedida = "Debe seleccionar una unidad de medida";
-    }
-
-    if (!formData.idCategoria) {
-      newErrors.idCategoria = "Debe seleccionar una categoría";
-    }
-
-    if (formData.tiempoEstimadoEnMinutos <= 0) {
-      newErrors.tiempoEstimadoEnMinutos =
-        "El tiempo estimado debe ser mayor a 0";
-    }
-
-    if (formData.precioVenta <= 0) {
-      newErrors.precioVenta = "El precio de venta debe ser mayor a 0";
-    }
-
-    if (formData.detalles.length === 0) {
-      newErrors.detalles = "Debe agregar al menos un ingrediente";
-    }
-
-    if (usarMargenAutomatico && formData.margenGanancia <= 1) {
-      newErrors.margenGanancia = "El margen debe ser mayor a 1 (100%)";
-    }
-
-    if (!formData.preparacion.trim()) {
-      newErrors.preparacion =
-        "Las instrucciones de preparación son obligatorias";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
-
-    try {
-      // Preparar datos sin imágenes para el backend
-      // Las imágenes se suben por separado a través de ProductoService.uploadImagenes
-      const dataWithoutImages = { ...formData };
-      delete (dataWithoutImages as any).imagenes;
-
-      // Crear/actualizar producto
-      await onSubmit(dataWithoutImages as ArticuloManufacturadoRequestDTO);
-
-      setAlert({
-        type: "success",
-        message: `Producto ${
-          producto ? "actualizado" : "creado"
-        } correctamente`,
-      });
-
-      // Limpiar si es creación
-      if (!producto) {
-        setTimeout(() => {
-          setFormData({
-            denominacion: "",
-            idUnidadMedida: 0,
-            idCategoria: 0,
-            descripcion: "",
-            tiempoEstimadoEnMinutos: 0,
-            preparacion: "",
-            precioVenta: 0,
-            margenGanancia: 2.5,
-            detalles: [],
-            imagenes: [],
-          });
-        }, 1000);
-      }
-    } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : "Error al guardar producto";
-      setAlert({
-        type: "error",
-        message: errorMsg,
-      });
-      console.error("❌ Error al guardar producto:", error);
-    }
-  };
-
-  const updateField = (
-    field: keyof ArticuloManufacturadoRequestDTO,
-    value: any
-  ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleImageChange = (imagenes: ImagenDTO[]) => {
-    updateField("imagenes", imagenes);
-    if (errors.imagenes) {
-      setErrors((prev) => ({ ...prev, imagenes: "" }));
-    }
-  };
-
-  // Calcular costo total de ingredientes
-  const costoTotal = formData.detalles.reduce((total, detalle) => {
-    const insumo = ingredientes.find(
-      (ing) => ing.idArticulo === detalle.idArticuloInsumo
+        return total + (insumo ? insumo.precioCompra * detalle.cantidad : 0);
+      },
+      0
     );
-    return total + (insumo ? detalle.cantidad * insumo.precioCompra : 0);
-  }, 0);
+  }, [detalles, insumos]);
 
-  // Filtrar solo categorías para comidas (no ingredientes)
-  const categoriasParaComidas = categorias.filter(
-    (cat) => !cat.esParaIngredientes && !cat.eliminado
-  );
+  const precioSugerido = useMemo(() => {
+    return costoProduccion * (1 + margen / 100);
+  }, [costoProduccion, margen]);
+
+  const ganancia = useMemo(() => {
+    const precioVentaActual = watch("precioVenta") || precioSugerido;
+    return precioVentaActual - costoProduccion;
+    // ✅ CORRECCIÓN: 'watch' no es una dependencia, sus valores sí.
+  }, [watch("precioVenta"), precioSugerido, costoProduccion]);
+
+  // ==================== MANEJADORES ====================
+
+  const handleFormSubmit = (data: ArticuloManufacturadoRequestDTO) => {
+    const payload = { ...data };
+    // Si el precio de venta no fue tocado, usar el sugerido
+    if (!payload.precioVenta || payload.precioVenta <= 0) {
+      payload.precioVenta = precioSugerido;
+    }
+    onSubmit(payload);
+  };
+
+  // ==================== RENDER ====================
 
   return (
-    <>
-      {alert && (
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-8">
+      {/* ✅ Notificación clara del backend */}
+      {serverErrorMessage && (
+        <Alert type="error" message={serverErrorMessage} />
+      )}
+
+      {isCreating && (
         <Alert
-          type={alert.type}
-          message={alert.message}
-          onClose={() => setAlert(null)}
+          type="info"
+          message="Las imágenes se pueden agregar después de crear el producto."
         />
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Información básica */}
-        <div className="border-b pb-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
-            Información Básica
-          </h2>
+      {/* SECCIÓN 1: INFORMACIÓN GENERAL */}
+      <div className="p-6 border rounded-lg bg-white shadow-sm">
+        <h2 className="text-xl font-semibold mb-6 text-gray-800">
+          1. Información General
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Controller
+            name="denominacion"
+            control={control}
+            render={({ field }) => (
+              <FormField
+                {...field}
+                label="Denominación"
+                required
+                error={errors.denominacion?.message}
+              />
+            )}
+          />
+          <Controller
+            name="idUnidadMedida"
+            control={control}
+            render={({ field }) => {
+              // Unidades habilitadas para productos manufacturados
+              const allowed = new Set([
+                "unidad",
+                "docena",
+                "media docena",
+                "docena y media",
+                "porción",
+                "entero",
+                "combo",
+              ]);
+              const opciones = unidadesMedida
+                .filter((u) => allowed.has(u.denominacion.toLowerCase()))
+                .map((u) => ({
+                  value: u.idUnidadMedida,
+                  label: u.denominacion,
+                }));
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              return (
+                <Select
+                  {...field}
+                  label="Unidad de Medida"
+                  options={opciones}
+                  required
+                  error={errors.idUnidadMedida?.message}
+                />
+              );
+            }}
+          />
+          <div className="md:col-span-2">
+            <Controller
+              name="descripcion"
+              control={control}
+              render={({ field }) => (
+                <FormField
+                  {...field}
+                  label="Descripción"
+                  type="textarea"
+                  required
+                  error={errors.descripcion?.message}
+                />
+              )}
+            />
+          </div>
+          <Controller
+            name="idCategoria"
+            control={control}
+            render={({ field }) => (
+              <CategoriaSelector
+                {...field}
+                categorias={categorias}
+                required
+                error={errors.idCategoria?.message}
+              />
+            )}
+          />
+        </div>
+      </div>
+
+      {/* SECCIÓN 2: RECETA */}
+      <div className="p-6 border rounded-lg bg-white shadow-sm">
+        <h2 className="text-xl font-semibold mb-6 text-gray-800">
+          2. Receta y Preparación
+        </h2>
+        {loadingInsumos ? (
+          <p>Cargando ingredientes...</p>
+        ) : (
+          <Controller
+            name="detalles"
+            control={control}
+            render={({ field }) => (
+              <IngredientesSelector
+                ingredientes={insumos}
+                detalles={field.value}
+                onDetallesChange={field.onChange}
+              />
+            )}
+          />
+        )}
+        {errors.detalles && (
+          <p className="text-sm text-red-600 mt-2">{errors.detalles.message}</p>
+        )}
+
+        <div className="mt-6">
+          <Controller
+            name="preparacion"
+            control={control}
+            render={({ field }) => (
+              <FormField
+                {...field}
+                label="Instrucciones de Preparación"
+                type="textarea"
+                rows={5}
+                required
+                error={errors.preparacion?.message}
+              />
+            )}
+          />
+        </div>
+      </div>
+
+      {/* SECCIÓN 3: COSTOS Y PRECIOS */}
+      <div className="p-6 border rounded-lg bg-white shadow-sm">
+        <h2 className="text-xl font-semibold mb-6 text-gray-800">
+          3. Costos y Precios
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
+          {/* Costo de Producción */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Costo de Producción
+            </label>
+            <div className="mt-1 p-3 bg-gray-100 rounded-md text-lg font-bold text-gray-800">
+              {costoProduccion.toFixed(2)} $
+            </div>
+          </div>
+
+          {/* Margen de Ganancia */}
+          <Controller
+            name="margenGananciaPorcentaje"
+            control={control}
+            render={({ field }) => (
+              <FormField
+                {...field}
+                onChange={(v) => field.onChange(Number(v))}
+                label="Margen de Ganancia (%)"
+                type="number"
+                min={0}
+                required
+                error={errors.margenGananciaPorcentaje?.message}
+              />
+            )}
+          />
+
+          {/* Precio de Venta Sugerido */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Precio Sugerido
+            </label>
+            <div className="mt-1 p-3 bg-green-50 border border-green-200 rounded-md text-lg font-bold text-green-700">
+              {precioSugerido.toFixed(2)} $
+            </div>
+          </div>
+
+          {/* Ganancia Estimada */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Ganancia Estimada
+            </label>
+            <div className="mt-1 p-3 bg-blue-50 border border-blue-200 rounded-md text-lg font-bold text-blue-700">
+              {ganancia.toFixed(2)} $
+            </div>
+          </div>
+        </div>
+        <div className="mt-6">
+          <Controller
+            name="precioVenta"
+            control={control}
+            render={({ field }) => (
+              <FormField
+                {...field}
+                onChange={(v) => field.onChange(Number(v))}
+                label="Precio de Venta Final (opcional)"
+                type="number"
+                min={0}
+                step={0.01}
+                helperText="Si se deja en 0, se usará el precio sugerido."
+                error={errors.precioVenta?.message}
+              />
+            )}
+          />
+        </div>
+      </div>
+
+      {/* SECCIÓN 4: TIEMPO DE PREPARACIÓN */}
+      <div className="p-6 border rounded-lg bg-white shadow-sm">
+        <h2 className="text-xl font-semibold mb-6 text-gray-800">
+          4. Tiempo de Preparación
+        </h2>
+        <Controller
+          name="tiempoEstimadoEnMinutos"
+          control={control}
+          render={({ field }) => (
             <FormField
-              label="Nombre del Producto"
-              name="denominacion"
-              value={formData.denominacion}
-              onChange={(value) => updateField("denominacion", value)}
-              placeholder="Ej: Pizza Margherita"
-              required
-              error={errors.denominacion}
-            />
-
-            <CategoriaSelector
-              categorias={categoriasParaComidas}
-              value={formData.idCategoria}
-              onChange={(value) => updateField("idCategoria", value)}
-              label="Categoría"
-              required
-              error={errors.idCategoria}
-            />
-
-            <Select
-              label="Unidad de Medida"
-              name="idUnidadMedida"
-              value={formData.idUnidadMedida}
-              onChange={(value) => updateField("idUnidadMedida", value)}
-              options={unidadesMedida.map((um) => ({
-                value: um.idUnidadMedida,
-                label: um.denominacion,
-              }))}
-              placeholder="Seleccione unidad"
-              required
-              error={errors.idUnidadMedida}
-              helperText="¿Cómo se vende? (Ej: Unidades, Porciones)"
-            />
-
-            <FormField
-              label="Tiempo de Preparación"
-              name="tiempoEstimadoEnMinutos"
+              {...field}
+              onChange={(v) => field.onChange(Number(v))}
+              label="⏱️ Tiempo Estimado (minutos)"
               type="number"
-              value={formData.tiempoEstimadoEnMinutos}
-              onChange={(value) =>
-                updateField("tiempoEstimadoEnMinutos", Number(value))
-              }
-              placeholder="30"
               min={1}
               required
-              error={errors.tiempoEstimadoEnMinutos}
-              helperText="En minutos"
+              error={errors.tiempoEstimadoEnMinutos?.message}
+              helperText="Tiempo aproximado para preparar este producto"
             />
-          </div>
-
-          <div className="mt-4">
-            <FormField
-              label="Descripción"
-              name="descripcion"
-              type="textarea"
-              value={formData.descripcion || ""}
-              onChange={(value) => updateField("descripcion", value)}
-              placeholder="Descripción del producto para los clientes..."
-              rows={3}
-            />
-          </div>
-        </div>
-
-        {/* IMAGEN DEL PRODUCTO */}
-        <div className="border-b pb-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
-            Imágenes del Producto
-          </h2>
-
-          <div className="max-w-md">
-            <ImageUpload
-              entityType={IMAGE_CONFIG.ENTITY_TYPES.MANUFACTURADO}
-              entityId={producto?.idArticulo}
-              currentImages={formData.imagenes || []}
-              onImagesChange={handleImageChange}
-              onError={(error) =>
-                setAlert({
-                  type: "error",
-                  message: `Error en imágenes: ${error}`,
-                })
-              }
-              label="Imágenes del Producto"
-              disabled={loading}
-              multiple={true}
-            />
-
-            <p className="mt-4 text-sm text-gray-600 space-y-1">
-              <span className="block">
-                🖼️ Buenas imágenes ayudan a las ventas.
-              </span>
-              <span className="block">
-                Se recomienda una foto clara del producto terminado.
-              </span>
-              {!producto && (
-                <span className="block text-blue-600 font-medium">
-                  💡 Las imágenes se subirán automáticamente al guardar el
-                  producto.
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Preparación */}
-        <div className="border-b pb-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
-            Preparación
-          </h2>
-
-          <FormField
-            label="Instrucciones de Preparación"
-            name="preparacion"
-            type="textarea"
-            value={formData.preparacion || ""}
-            onChange={(value) => updateField("preparacion", value)}
-            placeholder="1. Preparar la masa...&#10;2. Agregar ingredientes...&#10;3. Cocinar por..."
-            rows={6}
-            required
-            error={errors.preparacion}
-            helperText="Instrucciones paso a paso para la cocina"
-          />
-        </div>
-
-        {/* Ingredientes */}
-        <div className="border-b pb-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
-            Receta e Ingredientes
-          </h2>
-
-          <IngredientesSelector
-            ingredientes={ingredientes}
-            detalles={formData.detalles}
-            onDetallesChange={(detalles) => updateField("detalles", detalles)}
-          />
-
-          {errors.detalles && (
-            <p className="mt-2 text-sm text-red-600">{errors.detalles}</p>
           )}
-        </div>
+        />
+      </div>
 
-        {/* Precios */}
-        <div className="border-b pb-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
-            Precio de Venta
+      {/* SECCIÓN 5: FOTOS DEL PRODUCTO */}
+      {!isCreating && (
+        <div className="p-6 border rounded-lg bg-white shadow-sm">
+          <h2 className="text-xl font-semibold mb-6 text-gray-800">
+            5. Fotos del Producto
           </h2>
-
-          <div className="bg-gray-50 p-4 rounded-lg mb-4">
-            <div className="text-sm text-gray-600 space-y-1">
-              <div>
-                Costo de Ingredientes:{" "}
-                <span className="font-medium text-gray-900">
-                  ${costoTotal.toFixed(2)}
-                </span>
-              </div>
-              {costoTotal > 0 && formData.precioVenta > 0 && (
-                <div>
-                  Margen Real:{" "}
-                  <span
-                    className={`font-medium ${
-                      formData.precioVenta / costoTotal >=
-                      formData.margenGanancia
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {(formData.precioVenta / costoTotal).toFixed(2)}x
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="tipoPrecio"
-                  checked={usarMargenAutomatico}
-                  onChange={() => setUsarMargenAutomatico(true)}
-                  className="mr-2 cursor-pointer"
-                  disabled={loading}
-                />
-                <span className="cursor-pointer">
-                  Calcular precio automáticamente con margen
-                </span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="tipoPrecio"
-                  checked={!usarMargenAutomatico}
-                  onChange={() => setUsarMargenAutomatico(false)}
-                  className="mr-2 cursor-pointer"
-                  disabled={loading}
-                />
-                <span className="cursor-pointer">
-                  Establecer precio manualmente
-                </span>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {usarMargenAutomatico && (
-                <FormField
-                  label="Margen de Ganancia"
-                  name="margenGanancia"
-                  type="number"
-                  value={formData.margenGanancia}
-                  onChange={(value) =>
-                    updateField("margenGanancia", Number(value))
-                  }
-                  placeholder="2.5"
-                  min={1.1}
-                  step={0.1}
-                  required
-                  disabled={loading}
-                  error={errors.margenGanancia}
-                  helperText="Ej: 2.5 = 250% sobre el costo"
-                />
-              )}
-
-              <FormField
-                label="Precio de Venta"
-                name="precioVenta"
-                type="number"
-                value={formData.precioVenta}
-                onChange={(value) => updateField("precioVenta", Number(value))}
-                placeholder="0.00"
-                min={0.01}
-                step={0.01}
-                required
-                disabled={usarMargenAutomatico || loading}
-                error={errors.precioVenta}
-                helperText={
-                  usarMargenAutomatico
-                    ? "Calculado automáticamente"
-                    : "Precio final al cliente"
-                }
+          <Controller
+            name="imagenes"
+            control={control}
+            render={({ field }) => (
+              <ImageUpload
+                entityType="MANUFACTURADO"
+                entityId={producto?.idArticulo}
+                currentImages={field.value}
+                onImagesChange={field.onChange}
+                multiple
               />
-            </div>
-          </div>
+            )}
+          />
         </div>
+      )}
 
-        {/* Botones */}
-        <div className="flex justify-end space-x-3 pt-4 border-t">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={loading}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" loading={loading} disabled={loading}>
-            {producto ? "Actualizar" : "Crear"} Producto
-          </Button>
-        </div>
-      </form>
-    </>
+      {/* BOTONES DE ACCIÓN */}
+      <div className="flex justify-end space-x-4 pt-6 border-t">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={loading}
+        >
+          Cancelar
+        </Button>
+        <Button type="submit" loading={loading} disabled={loading}>
+          {isCreating ? "Crear Producto" : "Actualizar Producto"}
+        </Button>
+      </div>
+    </form>
   );
 };
 

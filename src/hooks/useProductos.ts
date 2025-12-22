@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { productoService } from "../services";
 import type { ArticuloManufacturadoResponseDTO } from "../types/productos/ArticuloManufacturadoResponseDTO";
 import type { ArticuloManufacturadoRequestDTO } from "../types/productos/ArticuloManufacturadoRequestDTO";
-import { productoService } from "../services";
 
+/**
+ * Hook personalizado para gestionar el estado y las operaciones CRUD de los productos manufacturados.
+ */
 export const useProductos = () => {
   const [productos, setProductos] = useState<
     ArticuloManufacturadoResponseDTO[]
@@ -10,155 +13,199 @@ export const useProductos = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ==================== OPERACIONES CRUD ====================
+  // ==================== OBTENCIÓN DE DATOS ====================
 
-  const fetchProductos = async () => {
+  /**
+   * Carga todos los productos desde el backend y actualiza el estado.
+   * Se utiliza useCallback para evitar re-creaciones innecesarias.
+   */
+  const fetchProductos = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const data = await productoService.getAll();
       setProductos(data);
+      setError(null);
+      return data;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Error al cargar productos"
-      );
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al cargar productos";
+      setError(message);
+      console.error(err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ==================== OPERACIONES CRUD (CON OPTIMIZACIÓN DE UI) ====================
+
+  /**
+   * Crea un nuevo producto y lo añade al estado local sin recargar toda la lista.
+   */
+  const createProducto = async (data: ArticuloManufacturadoRequestDTO) => {
+    setLoading(true);
+    try {
+      const nuevoProducto = await productoService.create(data);
+      setProductos((prev) => [...prev, nuevoProducto]);
+      setError(null);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error al crear el producto";
+      setError(message);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const createProducto = async (data: ArticuloManufacturadoRequestDTO) => {
-    try {
-      const nuevoProducto = await productoService.create(data);
-      await fetchProductos();
-      return nuevoProducto;
-    } catch (err) {
-      throw err;
-    }
-  };
-
+  /**
+   * Actualiza un producto y modifica solo ese elemento en el estado local.
+   */
   const updateProducto = async (
     id: number,
     data: ArticuloManufacturadoRequestDTO
   ) => {
+    setLoading(true);
     try {
       const productoActualizado = await productoService.update(id, data);
-      await fetchProductos();
-      return productoActualizado;
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  const deleteProducto = async (id: number) => {
-    try {
-      await productoService.bajaLogica(id);
-      await fetchProductos();
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  // ==================== BÚSQUEDAS ESPECÍFICAS ====================
-
-  const getProductoById = async (id: number) => {
-    try {
-      return await productoService.getById(id);
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  const getProductosByCategoria = async (idCategoria: number) => {
-    try {
-      return await productoService.getByCategoria(idCategoria);
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  const searchProductos = async (denominacion: string) => {
-    try {
-      return await productoService.searchByDenominacion(denominacion);
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  // ==================== GESTIÓN DE IMÁGENES ====================
-
-  const uploadImagenes = async (
-    idProducto: number,
-    files: File[]
-  ): Promise<any[]> => {
-    try {
-      return await productoService.uploadImagenes(idProducto, files);
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  const updateImagen = async (
-    idProducto: number,
-    file: File,
-    denominacion?: string
-  ): Promise<any> => {
-    try {
-      return await productoService.updateImagen(
-        idProducto,
-        file,
-        denominacion || "Imagen del producto"
+      setProductos((prev) =>
+        prev.map((p) => (p.idArticulo === id ? productoActualizado : p))
       );
+      setError(null);
     } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error al actualizar el producto";
+      setError(message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const deleteImagen = async (idImagen: number): Promise<boolean> => {
+  /**
+   * Realiza una baja lógica y actualiza el estado local marcando el producto como eliminado.
+   */
+  const deleteProducto = async (id: number) => {
+    setLoading(true);
     try {
-      return await productoService.deleteImagen(idImagen);
+      await productoService.delete(id);
+      setProductos((prev) =>
+        prev.map((p) => (p.idArticulo === id ? { ...p, eliminado: true } : p))
+      );
+      setError(null);
     } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error al eliminar el producto";
+      setError(message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getImagenes = async (idProducto: number): Promise<any[]> => {
+  // ✅ Toggle estado
+  const activateProducto = async (id: number) => {
+    setLoading(true);
     try {
-      return await productoService.getImagenes(idProducto);
+      await productoService.activate(id);
+      setProductos((prev) =>
+        prev.map((p) => (p.idArticulo === id ? { ...p, eliminado: false } : p))
+      );
+      setError(null);
     } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error al activar el producto";
+      setError(message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ==================== CICLO DE VIDA ====================
+  const deactivateProducto = async (id: number) => {
+    setLoading(true);
+    try {
+      await productoService.deactivate(id);
+      setProductos((prev) =>
+        prev.map((p) => (p.idArticulo === id ? { ...p, eliminado: true } : p))
+      );
+      setError(null);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error al desactivar el producto";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // ==================== BÚSQUEDAS Y FILTROS ====================
+
+  /**
+   * Busca productos por categoría y actualiza el estado con los resultados.
+   */
+  const getByCategoria = async (idCategoria: number) => {
+    setLoading(true);
+    try {
+      const data = await productoService.getByCategoria(idCategoria);
+      setProductos(data);
+      setError(null);
+      return data;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error al buscar por categoría";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Busca productos por denominación y actualiza el estado con los resultados.
+   */
+  const searchByDenominacion = async (denominacion: string) => {
+    setLoading(true);
+    try {
+      const data = await productoService.searchByDenominacion(denominacion);
+      setProductos(data);
+      setError(null);
+      return data;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error al buscar por denominación";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================== INICIALIZACIÓN Y RETORNO ====================
+
+  // Carga inicial de productos al montar el componente que usa el hook.
   useEffect(() => {
     fetchProductos();
-  }, []);
+  }, [fetchProductos]);
 
   return {
     // Estado
     productos,
     loading,
     error,
-
-    // Operaciones CRUD
+    // Operaciones
     createProducto,
     updateProducto,
     deleteProducto,
-    getProductoById,
-
-    // Búsquedas específicas
-    getProductosByCategoria,
-    searchProductos,
-
-    // Gestión de imágenes
-    uploadImagenes,
-    updateImagen,
-    deleteImagen,
-    getImagenes,
-
-    // Utilidades
+    fetchProductos,
+    getByCategoria,
+    searchByDenominacion,
+    // Alias y toggles
     refresh: fetchProductos,
+    activateProducto,
+    deactivateProducto,
   };
 };

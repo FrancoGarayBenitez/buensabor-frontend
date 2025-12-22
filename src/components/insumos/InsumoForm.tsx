@@ -6,10 +6,10 @@ import type { ImagenDTO } from "../../types/common/ImagenDTO";
 import { Button } from "../common/Button";
 import { FormField } from "../common/FormFieldProps";
 import { Select } from "../common/Select";
-import type { UnidadMedidaDTO } from "../../services";
 import { CategoriaSelector } from "../common/CategoriaSelector";
 import { ImageUpload } from "../common/ImageUpload";
 import { Alert } from "../common/Alert";
+import type { UnidadMedidaDTO } from "../../services";
 
 interface InsumoFormProps {
   insumo?: ArticuloInsumoResponseDTO;
@@ -243,10 +243,18 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
             name="idUnidadMedida"
             value={formData.idUnidadMedida}
             onChange={(value) => updateField("idUnidadMedida", value)}
-            options={unidadesMedida.map((um) => ({
-              value: um.idUnidadMedida,
-              label: um.denominacion,
-            }))}
+            // ✅ Solo unidades válidas para Insumos
+            options={(() => {
+              const allowedInsumo = new Set(["g", "ml", "unidad"]);
+              return unidadesMedida
+                .filter((um) =>
+                  allowedInsumo.has(um.denominacion.toLowerCase())
+                )
+                .map((um) => ({
+                  value: um.idUnidadMedida,
+                  label: um.denominacion,
+                }));
+            })()}
             placeholder="Seleccione"
             required
             error={errors.idUnidadMedida}

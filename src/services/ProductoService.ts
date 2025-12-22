@@ -1,34 +1,49 @@
 import { apiClienteService } from "./ApiClienteService";
-import ImageService from "./ImageService";
 import type { ArticuloManufacturadoRequestDTO } from "../types/productos/ArticuloManufacturadoRequestDTO";
 import type { ArticuloManufacturadoResponseDTO } from "../types/productos/ArticuloManufacturadoResponseDTO";
 
 /**
- * Servicio para operaciones CRUD de productos manufacturados.
+ * Servicio para realizar operaciones CRUD y búsquedas en productos manufacturados.
  */
 export class ProductoService {
   private readonly endpoint = "/articulos-manufacturados";
 
+  // Helper para extraer el mensaje del backend
+  private extractErrorMessage(err: unknown, fallback: string): string {
+    const anyErr = err as any;
+    return (
+      anyErr?.response?.data?.message ||
+      anyErr?.data?.message ||
+      anyErr?.message ||
+      fallback
+    );
+  }
+
+  // ==================== CRUD ====================
+
+  /**
+   * Obtiene todos los productos manufacturados.
+   */
   async getAll(): Promise<ArticuloManufacturadoResponseDTO[]> {
-    try {
-      return await apiClienteService.get<ArticuloManufacturadoResponseDTO[]>(
-        this.endpoint
-      );
-    } catch (error) {
-      throw this.handleError(error);
-    }
+    return apiClienteService.get<ArticuloManufacturadoResponseDTO[]>(
+      this.endpoint
+    );
   }
 
+  /**
+   * Obtiene un producto manufacturado por su ID.
+   * @param id - El ID del producto.
+   */
   async getById(id: number): Promise<ArticuloManufacturadoResponseDTO> {
-    try {
-      return await apiClienteService.get<ArticuloManufacturadoResponseDTO>(
-        `${this.endpoint}/${id}`
-      );
-    } catch (error) {
-      throw this.handleError(error);
-    }
+    return apiClienteService.get<ArticuloManufacturadoResponseDTO>(
+      `${this.endpoint}/${id}`
+    );
   }
 
+  /**
+   * Crea un nuevo producto manufacturado.
+   * @param data - DTO con los datos del producto.
+   */
   async create(
     data: ArticuloManufacturadoRequestDTO
   ): Promise<ArticuloManufacturadoResponseDTO> {
@@ -37,11 +52,20 @@ export class ProductoService {
         this.endpoint,
         data
       );
-    } catch (error) {
-      throw this.handleError(error);
+    } catch (err) {
+      const msg = this.extractErrorMessage(
+        err,
+        "No se pudo crear el producto. Verifique la denominación."
+      );
+      throw new Error(msg);
     }
   }
 
+  /**
+   * Actualiza un producto manufacturado existente.
+   * @param id - El ID del producto a actualizar.
+   * @param data - DTO con los nuevos datos del producto.
+   */
   async update(
     id: number,
     data: ArticuloManufacturadoRequestDTO
@@ -51,96 +75,60 @@ export class ProductoService {
         `${this.endpoint}/${id}`,
         data
       );
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  async bajaLogica(id: number): Promise<void> {
-    try {
-      await apiClienteService.deleteRequest<void>(`${this.endpoint}/${id}`);
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  // ==================== MÉTODOS DE BÚSQUEDA ====================
-
-  async getByCategoria(
-    idCategoria: number
-  ): Promise<ArticuloManufacturadoResponseDTO[]> {
-    try {
-      return await apiClienteService.get<ArticuloManufacturadoResponseDTO[]>(
-        `${this.endpoint}/categoria/${idCategoria}`
+    } catch (err) {
+      const msg = this.extractErrorMessage(
+        err,
+        "No se pudo actualizar el producto. Verifique la denominación."
       );
-    } catch (error) {
-      throw this.handleError(error);
+      throw new Error(msg);
     }
   }
 
+  /**
+   * Realiza una baja lógica de un producto manufacturado.
+   * @param id - El ID del producto a eliminar.
+   */
+  async delete(id: number): Promise<void> {
+    return apiClienteService.deleteRequest<void>(`${this.endpoint}/${id}`);
+  }
+
+  // ✅ Activar/Desactivar (PATCH)
+  async activate(id: number): Promise<void> {
+    return apiClienteService.patch<void>(`${this.endpoint}/${id}/activate`);
+  }
+
+  async deactivate(id: number): Promise<void> {
+    return apiClienteService.patch<void>(`${this.endpoint}/${id}/deactivate`);
+  }
+
+  // ==================== BÚSQUEDAS POR FILTRO ====================
+
+  /**
+   * Busca productos por su denominación.
+   * @param denominacion - El término de búsqueda.
+   */
   async searchByDenominacion(
     denominacion: string
   ): Promise<ArticuloManufacturadoResponseDTO[]> {
-    try {
-      return await apiClienteService.get<ArticuloManufacturadoResponseDTO[]>(
-        `${this.endpoint}/buscar?denominacion=${denominacion}`
-      );
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  // ==================== MÉTODOS DE IMÁGENES (usando ImageService) ====================
-
-  /**
-   * Sube una o más imágenes para un producto específico.
-   */
-  async uploadImagenes(idProducto: number, files: File[]): Promise<any[]> {
-    const uploadPromises = files.map((file) =>
-      ImageService.uploadImage(file, "manufacturados", idProducto)
-    );
-    return Promise.all(uploadPromises);
-  }
-
-  /**
-   * ✅ Actualiza imagen de un producto (elimina anterior + sube nueva)
-   * Utiliza el ImageService centralizado
-   */
-  async updateImagen(
-    idProducto: number,
-    file: File,
-    denominacion: string = "Imagen del producto"
-  ): Promise<any> {
-    return ImageService.updateImage(
-      file,
-      idProducto,
-      "manufacturados",
-      denominacion
+    return apiClienteService.get<ArticuloManufacturadoResponseDTO[]>(
+      `${this.endpoint}/buscar?denominacion=${encodeURIComponent(denominacion)}`
     );
   }
 
   /**
-   * Elimina una imagen por su ID.
+   * Obtiene todos los productos que pertenecen a una categoría específica.
+   * @param idCategoria - El ID de la categoría.
    */
-  async deleteImagen(idImagen: number): Promise<boolean> {
-    return ImageService.deleteImage(idImagen);
-  }
-
-  /**
-   * Obtiene todas las imágenes de un producto.
-   */
-  async getImagenes(idProducto: number): Promise<any[]> {
-    return ImageService.getImagesByEntity("manufacturados", idProducto);
-  }
-
-  /**
-   * Manejo centralizado de errores.
-   */
-  private handleError(error: any): Error {
-    return error instanceof Error
-      ? error
-      : new Error("Error en el servicio de productos.");
+  async getByCategoria(
+    idCategoria: number
+  ): Promise<ArticuloManufacturadoResponseDTO[]> {
+    return apiClienteService.get<ArticuloManufacturadoResponseDTO[]>(
+      `${this.endpoint}/categoria/${idCategoria}`
+    );
   }
 }
 
+/**
+ * Instancia única del servicio de productos.
+ */
 export const productoService = new ProductoService();
