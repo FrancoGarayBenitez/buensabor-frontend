@@ -27,10 +27,6 @@ export const InsumoModal: React.FC<InsumoModalProps> = ({
 }) => {
   const title = insumo ? "✏️ Editar Ingrediente" : "➕ Nuevo Ingrediente";
 
-  const handleSubmit = async (data: ArticuloInsumoRequestDTO) => {
-    await onSubmit(data);
-  };
-
   const categoriasIngredientesOBebidas = categorias.filter(
     (c) => c.tipoCategoria === "INGREDIENTES" || c.tipoCategoria === "BEBIDAS"
   );
@@ -41,7 +37,7 @@ export const InsumoModal: React.FC<InsumoModalProps> = ({
         insumo={insumo}
         categorias={categoriasIngredientesOBebidas}
         unidadesMedida={unidadesMedida}
-        onSubmit={handleSubmit}
+        onSubmit={onSubmit}
         onCancel={onClose}
         loading={loading}
       />

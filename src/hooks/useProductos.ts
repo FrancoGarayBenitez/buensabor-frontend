@@ -43,13 +43,17 @@ export const useProductos = () => {
 
   /**
    * Crea un nuevo producto y lo añade al estado local sin recargar toda la lista.
+   * Devuelve el producto recién creado.
    */
-  const createProducto = async (data: ArticuloManufacturadoRequestDTO) => {
+  const createProducto = async (
+    data: ArticuloManufacturadoRequestDTO
+  ): Promise<ArticuloManufacturadoResponseDTO> => {
     setLoading(true);
     try {
       const nuevoProducto = await productoService.create(data);
       setProductos((prev) => [...prev, nuevoProducto]);
       setError(null);
+      return nuevoProducto; // Devolver el nuevo producto
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Error al crear el producto";
@@ -62,11 +66,12 @@ export const useProductos = () => {
 
   /**
    * Actualiza un producto y modifica solo ese elemento en el estado local.
+   * Devuelve el producto actualizado.
    */
   const updateProducto = async (
     id: number,
     data: ArticuloManufacturadoRequestDTO
-  ) => {
+  ): Promise<ArticuloManufacturadoResponseDTO> => {
     setLoading(true);
     try {
       const productoActualizado = await productoService.update(id, data);
@@ -74,6 +79,7 @@ export const useProductos = () => {
         prev.map((p) => (p.idArticulo === id ? productoActualizado : p))
       );
       setError(null);
+      return productoActualizado; // Devolver el producto actualizado
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Error al actualizar el producto";

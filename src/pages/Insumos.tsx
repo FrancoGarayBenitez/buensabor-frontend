@@ -76,22 +76,30 @@ export const Insumos: React.FC = () => {
   const handleSubmit = async (data: ArticuloInsumoRequestDTO) => {
     setOperationLoading(true);
     try {
+      let result: ArticuloInsumoResponseDTO;
+
       if (editingInsumo) {
-        await updateInsumo(editingInsumo.idArticulo, data);
+        // ✅ Actualizar existente
+        result = await updateInsumo(editingInsumo.idArticulo, data);
         setAlert({
           type: "success",
           message: "Ingrediente actualizado correctamente",
         });
       } else {
-        await createInsumo(data);
+        // ✅ Crear nuevo
+        result = await createInsumo(data);
         setAlert({
           type: "success",
           message: "Ingrediente creado correctamente",
         });
       }
-      await refresh(); // asegura refresco tras submit
+
+      console.log("✅ Operación completada:", result);
+
+      // ✅ CORRECCIÓN: No llamar refresh() ya que el hook actualiza el estado automáticamente
       closeModal();
     } catch (error) {
+      console.error("❌ Error en handleSubmit:", error);
       setAlert({
         type: "error",
         message:
@@ -125,12 +133,14 @@ export const Insumos: React.FC = () => {
     }
 
     try {
+      // ✅ El hook ya actualiza el estado automáticamente
       await deleteInsumo(id);
       setAlert({
         type: "success",
         message: `"${nombreInsumo}" eliminado correctamente`,
       });
     } catch (error) {
+      console.error("❌ Error en handleDelete:", error);
       const errorMsg =
         error instanceof Error ? error.message : "Error al eliminar";
       setAlert({

@@ -142,3 +142,5 @@ export class DomicilioService {
       : new Error("Error en el servicio de domicilios");
   }
 }
+
+export const domicilioService = new DomicilioService();

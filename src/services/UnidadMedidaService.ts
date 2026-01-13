@@ -39,3 +39,5 @@ export class UnidadMedidaService {
       : new Error("Error en el servicio de unidades de medida");
   }
 }
+
+export const unidadMedidaService = new UnidadMedidaService();

@@ -19,7 +19,6 @@ import Footer from "./components/layout/Footer";
 import Header from "./components/layout/Header";
 import Home from "./pages/Home";
 import ProductoDetalle from "./pages/ProductoDetalle";
-import Catalogo from "./pages/Catalogo";
 import Usuarios from "./pages/Usuarios";
 
 // ✅ CORREGIDO: Solo usar el Context Unificado
@@ -199,6 +198,10 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
             <ShoppingBag className="w-5 h-5" />
             Productos
           </NavLink>
+          <NavLink to="/promociones" className="flex items-center gap-3">
+            <BadgePercent className="w-5 h-5" />
+            Promociones
+          </NavLink>
           <NavLink to="/gestion-pedidos" className="flex items-center gap-3">
             <ClipboardList className="w-5 h-5" />
             Gestión Pedidos
@@ -214,10 +217,6 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
           <NavLink to="/admin/empleados" className="flex items-center gap-3">
             <UserPlus className="w-5 h-5" />
             Nuevo Empleado
-          </NavLink>
-          <NavLink to="/promociones" className="flex items-center gap-3">
-            <BadgePercent className="w-5 h-5" />
-            Promociones
           </NavLink>
           <NavLink to="/informes" className="flex items-center gap-3">
             <BookCopy className="w-5 h-5" />
@@ -304,14 +303,6 @@ function App() {
           />
 
           {/* Rutas públicas sin protección */}
-          <Route
-            path="/catalogo"
-            element={
-              <PublicLayout>
-                <Catalogo />
-              </PublicLayout>
-            }
-          />
           <Route
             path="/productos/:id"
             element={

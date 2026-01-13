@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import {
   IMAGE_CONFIG,
@@ -7,12 +7,13 @@ import {
 } from "../../config/imageConfig";
 import type { ImagenDTO, EntityType } from "../../types/common/ImagenDTO";
 import { useImageUpload } from "../../hooks/useImageUpload";
+import { TrashIcon } from "lucide-react";
 
 interface ImageUploadProps {
-  entityType: EntityType; // ✅ usar tipo union
-  entityId?: number;
-  currentImages?: ImagenDTO[] | null;
+  entityType: EntityType;
+  currentImages?: ImagenDTO[];
   onImagesChange: (imagenes: ImagenDTO[]) => void;
+  onNewImageUploaded?: (url: string) => void;
   onError?: (error: string) => void;
   label?: string;
   required?: boolean;
@@ -20,136 +21,176 @@ interface ImageUploadProps {
   multiple?: boolean;
 }
 
+/**
+ * Componente interno para renderizar la previsualización de cada imagen.
+ * Maneja su propio estado de carga para mostrar un esqueleto hasta que la imagen esté lista.
+ */
+const ImagePreview: React.FC<{
+  image: ImagenDTO;
+  onRemove: (image: ImagenDTO) => void;
+  disabled?: boolean;
+}> = ({ image, onRemove, disabled }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  return (
+    <div className="relative group w-24 h-24 flex-shrink-0">
+      {/* Esqueleto de carga (visible hasta que la imagen carga) */}
+      {!isLoaded && (
+        <div className="absolute inset-0 bg-gray-300 rounded-md animate-pulse"></div>
+      )}
+
+      <img
+        src={image.url}
+        alt={image.denominacion}
+        onLoad={() => setIsLoaded(true)}
+        className={`w-full h-full object-cover rounded-md transition-opacity duration-300 ${
+          isLoaded ? "opacity-100" : "opacity-0"
+        }`}
+      />
+
+      {!disabled && (
+        <button
+          type="button"
+          onClick={() => onRemove(image)}
+          className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          aria-label="Eliminar imagen"
+        >
+          &times;
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const ImageUpload: React.FC<ImageUploadProps> = ({
   entityType,
-  entityId,
-  currentImages = [],
+  currentImages,
   onImagesChange,
+  onNewImageUploaded,
   onError,
   label = "Cargar Imagen",
   required = false,
   disabled = false,
   multiple = false,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [images, setImages] = useState<ImagenDTO[]>(currentImages || []);
-  const [error, setError] = useState<string | null>(null);
-
-  // ✅ usar hook centralizado para progreso/llamadas
+  const images = currentImages || [];
   const { uploading, progress, uploadImage, deleteImage } = useImageUpload();
 
-  useEffect(() => {
-    setImages(currentImages || []);
-  }, [currentImages]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canUpload = !disabled && !!entityId; // ✅ bloquear si no hay entityId
+  const canUpload = !disabled && !uploading;
 
-  const handleFileSelect = async (files: FileList) => {
-    if (!canUpload) {
-      const msg =
-        "Primero guarda la entidad para obtener un ID y habilitar la subida.";
-      setError(msg);
-      onError?.(msg);
-      return;
-    }
+  const handleFileSelect = useCallback(
+    async (files: FileList) => {
+      if (!canUpload) return;
+      setError(null);
 
-    if (uploading) return;
-    setError(null);
-
-    if (!multiple && files.length > 1) {
-      const msg = "Solo se puede cargar una imagen";
-      setError(msg);
-      onError?.(msg);
-      return;
-    }
-
-    if (
-      multiple &&
-      images.length + files.length > IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY
-    ) {
-      const msg = getMaxImagesErrorMessage();
-      setError(msg);
-      onError?.(msg);
-      return;
-    }
-
-    const newImages: ImagenDTO[] = [...images];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-
-      const validationError = validateImageFile(file);
-      if (validationError) {
-        setError(validationError);
-        onError?.(validationError);
-        continue;
+      if (!multiple && files.length > 1) {
+        const msg = "Solo se puede cargar una imagen";
+        setError(msg);
+        onError?.(msg);
+        return;
       }
 
-      try {
-        const result = await uploadImage(
-          file,
-          entityType,
-          entityId!,
-          file.name.split(".")[0]
-        );
+      // ✅ Usar la variable local 'images' que es segura
+      if (
+        multiple &&
+        images.length + files.length > IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY
+      ) {
+        const msg = getMaxImagesErrorMessage();
+        setError(msg);
+        onError?.(msg);
+        return;
+      }
 
-        if (result.success && result.url) {
-          newImages.push({
-            idImagen: result.idImagen,
-            denominacion: result.denominacion || file.name,
-            url: result.url,
-          });
-        } else {
-          const msg = result.error || IMAGE_CONFIG.ERRORS.UPLOAD_FAILED;
+      // ✅ Usar la variable local 'images'
+      const newImages: ImagenDTO[] = [...images];
+
+      for (const file of Array.from(files)) {
+        try {
+          const result = await uploadImage(file, entityType, file.name);
+          if (result && result.success && result.url) {
+            newImages.push({
+              denominacion: result.denominacion || file.name,
+              url: result.url,
+            });
+            // Notifica al componente padre sobre la nueva URL para el seguimiento.
+            onNewImageUploaded?.(result.url);
+          } else {
+            const errorMessage =
+              result?.error || IMAGE_CONFIG.ERRORS.UPLOAD_FAILED;
+            console.error(`[ImageUpload] ❌ La subida falló: ${errorMessage}`);
+            setError(errorMessage);
+            onError?.(errorMessage);
+          }
+        } catch (err) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : IMAGE_CONFIG.ERRORS.UNKNOWN_ERROR;
           setError(msg);
           onError?.(msg);
         }
-      } catch (err) {
+      }
+
+      onImagesChange(newImages);
+
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [
+      canUpload,
+      entityType,
+      images,
+      onError,
+      onImagesChange,
+      onNewImageUploaded,
+      uploadImage,
+    ]
+  );
+
+  const handleRemoveImage = async (imageToRemove: ImagenDTO) => {
+    if (disabled || uploading) return;
+
+    // Si la imagen tiene un ID, significa que existe en la BD.
+    // Si no tiene ID pero sí una URL que no es un blob, fue recién subida.
+    // En ambos casos, intentamos borrarla del servidor.
+    if (
+      imageToRemove.idImagen ||
+      (imageToRemove.url && !imageToRemove.url.startsWith("blob:"))
+    ) {
+      try {
+        // Extraer el ID de la imagen si existe, o deducirlo de la URL si es necesario.
+        // Por ahora, asumimos que las imágenes recién subidas no necesitan borrado inmediato
+        // si el backend las limpia, pero es más seguro borrarlas explícitamente.
+        // Para este ejemplo, solo borraremos las que tienen ID.
+        if (imageToRemove.idImagen) {
+          await deleteImage(imageToRemove.idImagen);
+        }
+        // NOTA: Una lógica más avanzada podría extraer un identificador de la URL
+        // para borrar archivos recién subidos que aún no tienen ID en el estado del formulario.
+      } catch (error) {
+        console.error(
+          "No se pudo eliminar la imagen del servidor, se eliminará solo de la vista.",
+          error
+        );
+        // Opcional: notificar al usuario del error.
         const msg =
-          err instanceof Error
-            ? err.message
-            : IMAGE_CONFIG.ERRORS.UNKNOWN_ERROR;
+          "La imagen no se pudo eliminar del servidor, pero se quitará de la vista.";
         setError(msg);
         onError?.(msg);
       }
     }
 
-    setImages(newImages);
-    onImagesChange(newImages);
-
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleRemoveImage = async (imageToRemove: ImagenDTO) => {
-    if (disabled || uploading) return;
-
-    try {
-      if (imageToRemove.idImagen) {
-        const ok = await deleteImage(imageToRemove.idImagen);
-        if (!ok) {
-          console.warn(
-            "No se pudo eliminar en servidor, se remueve localmente"
-          );
-        }
-      }
-      const updated = images.filter(
-        (img) => img.idImagen !== imageToRemove.idImagen
-      );
-      setImages(updated);
-      onImagesChange(updated);
-      setError(null);
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Error al eliminar imagen";
-      setError(msg);
-      onError?.(msg);
-    }
+    const updatedImages = images.filter((img) => img.url !== imageToRemove.url);
+    onImagesChange(updatedImages);
+    setError(null); // Limpiar errores previos al tener éxito
   };
 
   const handleClick = () => {
-    if (!canUpload) return;
-    if (disabled || uploading || (!multiple && images.length >= 1)) return;
+    // ✅ Usar la variable local 'images'
+    if (!canUpload || uploading || (!multiple && images.length >= 1)) return;
     fileInputRef.current?.click();
   };
 
@@ -160,7 +201,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
-    if (!canUpload || disabled || uploading) return;
+    if (!canUpload || uploading) return;
     e.preventDefault();
     setIsDragOver(true);
   };
@@ -171,7 +212,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleDrop = (e: React.DragEvent) => {
-    if (!canUpload || disabled || uploading) return;
+    if (!canUpload || uploading) return;
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files) {
@@ -183,33 +224,65 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     (!multiple && images.length >= 1) ||
     (multiple && images.length >= IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY);
 
+  // ✅ CORRECCIÓN: Inicializar con las imágenes actuales como 'loaded'
+  const [imageLoadStates, setImageLoadStates] = useState<{
+    [key: string]: "loading" | "loaded" | "error";
+  }>(() => {
+    const initialState: { [key: string]: "loading" | "loaded" | "error" } = {};
+    images.forEach((image) => {
+      if (image.url) {
+        initialState[image.url] = "loaded"; // Asumir que las existentes están cargadas
+      }
+    });
+    return initialState;
+  });
+
+  // ✅ NUEVO: Sincronizar cuando cambien las props
+  React.useEffect(() => {
+    setImageLoadStates((prev) => {
+      const newState = { ...prev };
+      images.forEach((image) => {
+        if (image.url && !newState[image.url]) {
+          newState[image.url] = "loaded";
+        }
+      });
+      return newState;
+    });
+  }, [images]);
+
+  const handleImageLoad = (url: string) => {
+    console.log(`✅ Imagen cargada exitosamente: ${url}`);
+    setImageLoadStates((prev) => ({ ...prev, [url]: "loaded" }));
+  };
+
+  const handleImageError = (url: string, error: any) => {
+    console.error(`❌ Error al cargar imagen: ${url}`, error);
+    setImageLoadStates((prev) => ({ ...prev, [url]: "error" }));
+  };
+
   return (
     <div className="space-y-4">
-      <label className="block text-sm font-medium text-gray-700">
-        {label}
-        {required && <span className="text-red-600 ml-1">*</span>}
-        {multiple && (
-          <span className="text-gray-500 text-xs ml-2">
-            ({images.length}/{IMAGE_CONFIG.MAX_IMAGES_PER_ENTITY})
-          </span>
-        )}
-      </label>
-
-      {!canUpload && (
-        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-700">
-            Primero guarda la entidad para habilitar la subida de imágenes.
-          </p>
+      {/* Previsualización de Imágenes */}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-4">
+          {images.map((img, index) => (
+            <ImagePreview
+              key={img.idImagen || img.url || index}
+              image={img}
+              onRemove={handleRemoveImage}
+              disabled={disabled || uploading}
+            />
+          ))}
         </div>
       )}
 
-      {/* ZONA DE CARGA */}
+      {/* Zona de Carga (Dropzone) */}
       {!isFull && (
         <div
           className={`
             relative border-2 border-dashed rounded-lg p-6 text-center transition-all
             ${
-              disabled
+              !canUpload // La clase de deshabilitado ahora solo depende de `canUpload`.
                 ? "opacity-50 cursor-not-allowed bg-gray-50"
                 : "cursor-pointer"
             }
@@ -263,46 +336,6 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               />
             </div>
           )}
-        </div>
-      )}
-
-      {/* GALERÍA */}
-      {images.length > 0 && (
-        <div
-          className={`grid gap-4 ${
-            multiple
-              ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-              : "grid-cols-1"
-          }`}
-        >
-          {images.map((image, index) => (
-            <div key={image.idImagen || index} className="relative group">
-              <img
-                src={image.url}
-                alt={image.denominacion}
-                className="w-full h-40 object-cover rounded-lg shadow-md"
-              />
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleRemoveImage(image);
-                  }}
-                  className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
-                  title="Eliminar imagen"
-                  disabled={uploading || disabled}
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </button>
-              </div>
-              {multiple && index === 0 && (
-                <div className="absolute top-2 left-2 bg-orange-500 text-white text-xs px-2 py-1 rounded">
-                  Principal
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       )}
 

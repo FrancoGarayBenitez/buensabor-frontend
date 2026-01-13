@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import ImageService from "../../services/ImageService";
+import { extractFilenameFromUrl } from "../../config/imageConfig";
 import type { ArticuloInsumoRequestDTO } from "../../types/insumos/ArticuloInsumoRequestDTO";
 import type { ArticuloInsumoResponseDTO } from "../../types/insumos/ArticuloInsumoResponseDTO";
 import type { CategoriaResponseDTO } from "../../types/categorias/CategoriaResponseDTO";
@@ -8,7 +10,6 @@ import { FormField } from "../common/FormFieldProps";
 import { Select } from "../common/Select";
 import { CategoriaSelector } from "../common/CategoriaSelector";
 import { ImageUpload } from "../common/ImageUpload";
-import { Alert } from "../common/Alert";
 import type { UnidadMedidaDTO } from "../../services";
 
 interface InsumoFormProps {
@@ -55,10 +56,9 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [alert, setAlert] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+
+  // Referencia para almacenar las URLs de las imágenes subidas en esta sesión.
+  const newlyUploadedUrls = useRef<string[]>([]);
 
   // ==================== EFECTOS ====================
 
@@ -104,10 +104,11 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
       newErrors.stockMaximo = "Debe ser > 0";
     }
 
-    if (!isCreating && !formData.esParaElaborar) {
+    // ✅ CORRECCIÓN: Validar precioVenta siempre que sea para Venta Directa
+    if (!formData.esParaElaborar) {
       const precioVentaNum = Number(formData.precioVenta);
       if (isNaN(precioVentaNum) || precioVentaNum <= 0) {
-        newErrors.precioVenta = "Requerido para venta directa";
+        newErrors.precioVenta = "Debe ser > 0 para venta directa";
       }
     }
 
@@ -115,11 +116,14 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // ==================== MANEJADORES ====================
+  // ==================== MANEJADORES SIMPLIFICADOS ====================
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
+
+    // Si el formulario se envía, las imágenes se van a usar. Limpiamos el tracker.
+    newlyUploadedUrls.current = [];
 
     try {
       const payload: ArticuloInsumoRequestDTO = {
@@ -134,38 +138,76 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
         imagenes: formData.imagenes || [],
       };
 
-      const dataToSubmit = { ...payload };
-      delete (dataToSubmit as any).imagenes;
+      console.log("📝 Datos del formulario a enviar:", payload);
 
-      await onSubmit(dataToSubmit as ArticuloInsumoRequestDTO);
+      // ✅ CORRECCIÓN: Solo llamar onSubmit del padre, no manejar alerts internos
+      await onSubmit(payload);
 
-      setAlert({
-        type: "success",
-        message: `Ingrediente ${
-          isCreating ? "creado" : "actualizado"
-        } correctamente`,
-      });
-
+      // ✅ CORRECCIÓN: Limpiar formulario solo en creación exitosa
       if (isCreating) {
-        setTimeout(() => {
-          setFormData({
-            denominacion: "",
-            precioVenta: "",
-            idUnidadMedida: 0,
-            idCategoria: 0,
-            precioCompra: "",
-            stockActual: "",
-            stockMaximo: "",
-            esParaElaborar: true,
-            imagenes: [],
-          });
-        }, 1000);
+        setFormData({
+          denominacion: "",
+          precioVenta: "",
+          idUnidadMedida: 0,
+          idCategoria: 0,
+          precioCompra: "",
+          stockActual: "",
+          stockMaximo: "",
+          esParaElaborar: true,
+          imagenes: [],
+        });
       }
     } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : "Error al guardar";
-      setAlert({ type: "error", message: errorMsg });
+      console.error("❌ Error en formulario:", error);
+      // ✅ Los errores se manejan en el nivel superior (página)
+      throw error;
     }
+  };
+
+  /**
+   * Limpia los archivos físicos que se subieron pero no se utilizaron
+   * porque el usuario canceló la operación.
+   */
+  const cleanupUnusedImages = () => {
+    if (newlyUploadedUrls.current.length > 0) {
+      newlyUploadedUrls.current.forEach(async (url) => {
+        const filename = extractFilenameFromUrl(url);
+        if (filename) {
+          try {
+            await ImageService.deletePhysicalFile(filename);
+          } catch (error) {
+            console.error(
+              `Error al limpiar el archivo huérfano ${filename}:`,
+              error
+            );
+          }
+        }
+      });
+      newlyUploadedUrls.current = [];
+    }
+  };
+
+  const handleCancelClick = () => {
+    // Limpia las imágenes no utilizadas
+    cleanupUnusedImages();
+
+    // Resetea el estado del formulario si es necesario
+    if (isCreating) {
+      setFormData({
+        denominacion: "",
+        precioVenta: "",
+        idUnidadMedida: 0,
+        idCategoria: 0,
+        precioCompra: "",
+        stockActual: "",
+        stockMaximo: "",
+        esParaElaborar: true,
+        imagenes: [],
+      });
+    }
+
+    // Llama al callback de cancelación
+    onCancel();
   };
 
   const updateField = (field: keyof FormState | string, value: any) => {
@@ -177,7 +219,15 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
   };
 
   const handleImagesChange = (imagenes: ImagenDTO[]) => {
-    updateField("imagenes", imagenes);
+    updateField("imagenes", [...imagenes]);
+  };
+
+  /**
+   * Callback que se ejecuta cuando ImageUpload sube un nuevo archivo.
+   * Registra la URL para una posible limpieza posterior.
+   */
+  const handleNewImageUploaded = (url: string) => {
+    newlyUploadedUrls.current.push(url);
   };
 
   const handleEsParaElaborarChange = (esParaElaborar: boolean) => {
@@ -197,23 +247,6 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
 
   return (
     <>
-      {alert && (
-        <Alert
-          type={alert.type}
-          message={alert.message}
-          onClose={() => setAlert(null)}
-        />
-      )}
-
-      {isCreating && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6 text-sm">
-          <p className="text-blue-700">
-            <strong>ℹ️ Nota:</strong> Las imágenes se pueden agregar después de
-            crear el ingrediente.
-          </p>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Información Básica */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -294,7 +327,8 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
         </div>
 
         {/* Precio de Venta - Solo para venta directa */}
-        {!isCreating && !formData.esParaElaborar && (
+        {/* ✅ CORRECCIÓN: Mostrar siempre que sea para venta directa, no solo en edición */}
+        {!formData.esParaElaborar && (
           <div className="border-t pt-6">
             <FormField
               label="Precio de Venta"
@@ -331,8 +365,8 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
           />
         </div>
 
-        {/* Imágenes */}
-        {!isCreating && (
+        {/* SECCIÓN DE IMÁGENES */}
+        {!formData.esParaElaborar && (
           <div className="border-t pt-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Imágenes</h3>
             <p className="text-sm text-gray-600 mb-4">
@@ -344,9 +378,9 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
             <div className="max-w-md">
               <ImageUpload
                 entityType="INSUMO"
-                entityId={insumo?.idArticulo}
                 currentImages={formData.imagenes || []}
                 onImagesChange={handleImagesChange}
+                onNewImageUploaded={handleNewImageUploaded}
                 disabled={loading}
                 multiple={true}
               />
@@ -359,7 +393,7 @@ export const InsumoForm: React.FC<InsumoFormProps> = ({
           <Button
             type="button"
             variant="outline"
-            onClick={onCancel}
+            onClick={handleCancelClick}
             disabled={loading}
           >
             Cancelar

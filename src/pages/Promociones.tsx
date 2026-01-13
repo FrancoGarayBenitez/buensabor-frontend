@@ -1,299 +1,271 @@
-import React, { useState } from 'react';
-import { Plus, Search, Filter, Tag, Calendar, Clock, Percent, DollarSign } from 'lucide-react';
-import { usePromociones } from '../hooks/usePromociones';
-import { PromocionForm } from '../components/promociones/PromocionForm';
-import { PromocionModal } from '../components/promociones/PromocionModal';
-import { PromocionCard } from '../components/promociones/PromocionCart';
-import { Alert } from '../components/common/Alert';
-import { Button } from '../components/common/Button';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import type { PromocionResponseDTO } from '../types/promociones';
+import React, { useState, useMemo } from "react";
+import { Button } from "../components/common/Button";
+import { Alert } from "../components/common/Alert";
+import { LoadingSpinner } from "../components/common/LoadingSpinner";
+import { PromocionModal } from "../components/promociones/PromocionModal";
+import { PromocionesList } from "../components/promociones/PromocionesList";
+import { PromocionPreviewModal } from "../components/promociones/PromocionPreviewModal";
 
-type FiltroEstado = 'TODAS' | 'VIGENTES' | 'PROGRAMADAS' | 'EXPIRADAS' | 'INACTIVAS';
+// Hooks
+import { usePromociones } from "../hooks/usePromociones";
+import { useProductos } from "../hooks/useProductos";
+import { useInsumos } from "../hooks/useInsumos";
 
-const Promociones: React.FC = () => {
+// Types
+import type {
+  PromocionResponse,
+  PromocionRequest,
+  ArticuloShort,
+} from "../types/promociones/promocion.types";
+import { ESTADO_PROMOCION } from "../types/promociones/promocion.types";
+
+export const Promociones: React.FC = () => {
   const {
     promociones,
-    promocionesVigentes,
-    loading,
+    loading: loadingPromociones,
     error,
-    crearPromocion,
-    actualizarPromocion,
-    eliminarPromocion,
-    activarPromocion,
-    desactivarPromocion,
-    refreshPromociones,
-    limpiarError
-  } = usePromociones(true, true); // Cargar todas y vigentes
+    createPromocion,
+    updatePromocion,
+    deletePromocion,
+    toggleActivoPromocion,
+    refresh,
+  } = usePromociones();
 
-  // Estados del componente
-  const [modalAbierto, setModalAbierto] = useState(false);
-  const [promocionSeleccionada, setPromocionSeleccionada] = useState<PromocionResponseDTO | null>(null);
-  const [modoEdicion, setModoEdicion] = useState(false);
-  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('TODAS');
-  const [busqueda, setBusqueda] = useState('');
-  const [procesando, setProcesando] = useState<number | null>(null);
+  const { productos, loading: loadingProductos } = useProductos();
+  const { insumos, loading: loadingInsumos } = useInsumos();
 
-  // Funciones de manejo
-  const handleAbrirModal = (promocion?: PromocionResponseDTO) => {
-    setPromocionSeleccionada(promocion || null);
-    setModoEdicion(!!promocion);
-    setModalAbierto(true);
-    limpiarError();
+  // ==================== ESTADO ====================
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingPromocion, setEditingPromocion] = useState<
+    PromocionResponse | undefined
+  >();
+  const [operationLoading, setOperationLoading] = useState(false);
+  const [alert, setAlert] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null);
+
+  // Estado para el modal de previsualización
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPromocion, setPreviewPromocion] = useState<
+    PromocionResponse | undefined
+  >(undefined);
+
+  // ==================== DATOS COMBINADOS ====================
+  const articulosParaVenta = useMemo((): ArticuloShort[] => {
+    const productosMapeados = productos.map((p) => ({
+      id: p.idArticulo,
+      denominacion: p.denominacion,
+      precioVenta: p.precioVenta,
+    }));
+
+    const insumosParaVenta = insumos
+      .filter((i) => !i.esParaElaborar)
+      .map((i) => ({
+        id: i.idArticulo,
+        denominacion: i.denominacion,
+        precioVenta: i.precioVenta,
+      }));
+
+    return [...productosMapeados, ...insumosParaVenta].sort((a, b) =>
+      a.denominacion.localeCompare(b.denominacion)
+    );
+  }, [productos, insumos]);
+
+  // ==================== MANEJADORES ====================
+
+  const handleCreate = () => {
+    setEditingPromocion(undefined);
+    setFormErrorMessage(null);
+    setModalOpen(true);
   };
 
-  const handleCerrarModal = () => {
-    setModalAbierto(false);
-    setPromocionSeleccionada(null);
-    setModoEdicion(false);
+  const handleEdit = (promocion: PromocionResponse) => {
+    setEditingPromocion(promocion);
+    setFormErrorMessage(null);
+    setModalOpen(true);
   };
 
-  const handleGuardarPromocion = async (data: any) => {
+  // Manejador para abrir la vista previa
+  const handleView = (promocion: PromocionResponse) => {
+    setPreviewPromocion(promocion);
+    setPreviewOpen(true);
+  };
+
+  // ✅ NUEVO: Manejador para abrir edición desde la previsualización
+  const handleEditFromPreview = (promocion: PromocionResponse) => {
+    setPreviewOpen(false);
+    setEditingPromocion(promocion);
+    setModalOpen(true);
+  };
+
+  const handleSubmit = async (data: PromocionRequest) => {
+    setOperationLoading(true);
+    setFormErrorMessage(null);
+
+    // Combinar fecha y hora en formato ISO 8601
+    const payload: PromocionRequest = {
+      ...data,
+      fechaDesde: `${data.fechaDesde}T${data.horaDesde}`,
+      fechaHasta: `${data.fechaHasta}T${data.horaHasta}`,
+    };
+
     try {
-      if (modoEdicion && promocionSeleccionada) {
-        await actualizarPromocion(promocionSeleccionada.idPromocion, data);
+      if (editingPromocion) {
+        await updatePromocion(editingPromocion.id, payload);
+        setAlert({
+          type: "success",
+          message: "Promoción actualizada correctamente",
+        });
       } else {
-        await crearPromocion(data);
+        await createPromocion(payload);
+        setAlert({
+          type: "success",
+          message: "Promoción creada correctamente",
+        });
       }
-      handleCerrarModal();
+      closeModal();
     } catch (error) {
-      console.error('Error al guardar promoción:', error);
-    }
-  };
-
-  const handleEliminar = async (id: number) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar esta promoción?')) {
-      try {
-        setProcesando(id);
-        await eliminarPromocion(id);
-      } catch (error) {
-        console.error('Error al eliminar:', error);
-      } finally {
-        setProcesando(null);
-      }
-    }
-  };
-
-  const handleToggleEstado = async (promocion: PromocionResponseDTO) => {
-    try {
-      setProcesando(promocion.idPromocion);
-      if (promocion.activo) {
-        await desactivarPromocion(promocion.idPromocion);
-      } else {
-        await activarPromocion(promocion.idPromocion);
-      }
-    } catch (error) {
-      console.error('Error al cambiar estado:', error);
+      setFormErrorMessage(
+        error instanceof Error ? error.message : "Error al guardar la promoción"
+      );
     } finally {
-      setProcesando(null);
+      setOperationLoading(false);
     }
   };
 
-  // Filtrar promociones
-  const promocionesFiltradas = promociones.filter(promocion => {
-    // Filtro por búsqueda
-    if (busqueda.trim()) {
-      const busquedaLower = busqueda.toLowerCase();
-      if (!promocion.denominacion.toLowerCase().includes(busquedaLower) &&
-          !promocion.descripcionDescuento?.toLowerCase().includes(busquedaLower)) {
-        return false;
-      }
-    }
-
-    // Filtro por estado
-    switch (filtroEstado) {
-      case 'VIGENTES':
-        return promocion.estaVigente && promocion.activo;
-      case 'PROGRAMADAS':
-        return promocion.activo && !promocion.estaVigente && 
-               promocion.estadoDescripcion.includes('inicia');
-      case 'EXPIRADAS':
-        return promocion.estadoDescripcion.includes('Expirada');
-      case 'INACTIVAS':
-        return !promocion.activo;
-      default:
-        return true;
-    }
-  });
-
-  // Estadísticas
-  const stats = {
-    total: promociones.length,
-    vigentes: promociones.filter(p => p.estaVigente && p.activo).length,
-    programadas: promociones.filter(p => p.activo && !p.estaVigente && 
-                                      p.estadoDescripcion.includes('inicia')).length,
-    inactivas: promociones.filter(p => !p.activo).length
+  const handleDelete = async (id: number) => {
+    await deletePromocion(id);
+    setAlert({ type: "success", message: "Promoción eliminada" });
   };
+
+  const handleToggleActivo = async (id: number) => {
+    await toggleActivoPromocion(id);
+    setAlert({ type: "success", message: "Estado de la promoción cambiado" });
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingPromocion(undefined);
+    setFormErrorMessage(null);
+  };
+
+  // ==================== ESTADÍSTICAS ====================
+
+  const stats = useMemo(() => {
+    return {
+      total: promociones.length,
+      vigentes: promociones.filter((p) => p.estado === ESTADO_PROMOCION.VIGENTE)
+        .length,
+      programadas: promociones.filter(
+        (p) => p.estado === ESTADO_PROMOCION.PROGRAMADA
+      ).length,
+    };
+  }, [promociones]);
+
+  // ==================== RENDER ====================
+
+  const isLoading = loadingPromociones || loadingProductos || loadingInsumos;
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <LoadingSpinner size="lg" />
+        <p className="text-center text-gray-500 mt-4">Cargando datos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestión de Promociones</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Gestión de Promociones
+          </h1>
           <p className="text-gray-600 mt-1">
-            Administra las promociones y descuentos de tu negocio
+            Cree y administre ofertas y descuentos especiales
           </p>
         </div>
-        <Button
-          onClick={() => handleAbrirModal()}
-          className="bg-green-600 hover:bg-green-700"
-          
-        >
-          Nueva Promoción
-        </Button>
+        <Button onClick={handleCreate}>+ Nueva Promoción</Button>
       </div>
 
-      {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-            </div>
-            <Tag className="w-8 h-8 text-gray-400" />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Vigentes</p>
-              <p className="text-2xl font-bold text-green-600">{stats.vigentes}</p>
-            </div>
-            <Calendar className="w-8 h-8 text-green-400" />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Programadas</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.programadas}</p>
-            </div>
-            <Clock className="w-8 h-8 text-blue-400" />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Inactivas</p>
-              <p className="text-2xl font-bold text-gray-600">{stats.inactivas}</p>
-            </div>
-            <Tag className="w-8 h-8 text-gray-400" />
-          </div>
-        </div>
-      </div>
-
-      {/* Controles de filtrado y búsqueda */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Búsqueda */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Buscar promociones..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Filtro por estado */}
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)}
-              className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white min-w-[150px]"
-            >
-              <option value="TODAS">Todas</option>
-              <option value="VIGENTES">Vigentes</option>
-              <option value="PROGRAMADAS">Programadas</option>
-              <option value="EXPIRADAS">Expiradas</option>
-              <option value="INACTIVAS">Inactivas</option>
-            </select>
-          </div>
-
-          <Button
-            onClick={refreshPromociones}
-            variant="outline"
-            className="whitespace-nowrap"
-          >
-            Actualizar
-          </Button>
-        </div>
-      </div>
-
-      {/* Error */}
-      {error && (
+      {/* Alerts */}
+      {alert && (
         <Alert
-          type="error"
-          title="Error"
-          message={error}
-          onClose={limpiarError}
+          type={alert.type}
+          message={alert.message}
+          onClose={() => setAlert(null)}
         />
       )}
-
-      {/* Loading */}
-      {loading && (
-        <div className="flex justify-center py-8">
-          <LoadingSpinner />
-        </div>
+      {error && (
+        <Alert type="error" message={error} onClose={() => setAlert(null)} />
       )}
 
-      {/* Lista de promociones */}
-      {!loading && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {promocionesFiltradas.length === 0 ? (
-            <div className="col-span-full bg-white p-8 rounded-lg shadow-sm border text-center">
-              <Tag className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No hay promociones
-              </h3>
-              <p className="text-gray-500 mb-4">
-                {busqueda || filtroEstado !== 'TODAS' 
-                  ? 'No se encontraron promociones con los filtros aplicados.'
-                  : 'Comienza creando tu primera promoción.'
-                }
-              </p>
-              {(!busqueda && filtroEstado === 'TODAS') && (
-                <Button onClick={() => handleAbrirModal()}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Crear Primera Promoción
-                </Button>
-              )}
-            </div>
-          ) : (
-            promocionesFiltradas.map((promocion) => (
-              <PromocionCard
-                key={promocion.idPromocion}
-                promocion={promocion}
-                onEditar={() => handleAbrirModal(promocion)}
-                onEliminar={() => handleEliminar(promocion.idPromocion)}
-                onToggleEstado={() => handleToggleEstado(promocion)}
-                procesando={procesando === promocion.idPromocion}
-              />
-            ))
-          )}
-        </div>
-      )}
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard label="Total Promociones" value={stats.total} color="blue" />
+        <StatCard label="Vigentes Ahora" value={stats.vigentes} color="green" />
+        <StatCard
+          label="Programadas"
+          value={stats.programadas}
+          color="yellow"
+        />
+      </div>
 
-      {/* Modal */}
+      {/* Tabla */}
+      <PromocionesList
+        promociones={promociones}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onToggleActivo={handleToggleActivo}
+        onView={handleView}
+        onRefresh={refresh}
+      />
+
+      {/* Modal de Creación/Edición */}
       <PromocionModal
-        abierto={modalAbierto}
-        onCerrar={handleCerrarModal}
-        titulo={modoEdicion ? 'Editar Promoción' : 'Nueva Promoción'}
-      >
-        <PromocionForm
-          promocion={promocionSeleccionada}
-          onGuardar={handleGuardarPromocion}
-          onCancelar={handleCerrarModal}
-        />
-      </PromocionModal>
+        isOpen={modalOpen}
+        onClose={closeModal}
+        promocion={editingPromocion}
+        articulosDisponibles={articulosParaVenta}
+        onSubmit={handleSubmit}
+        loading={operationLoading}
+        serverErrorMessage={formErrorMessage ?? undefined}
+      />
+
+      {/* Modal de Previsualización */}
+      <PromocionPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        promocion={previewPromocion}
+        onEdit={handleEditFromPreview}
+      />
+    </div>
+  );
+};
+
+// ==================== COMPONENTE AUXILIAR ====================
+
+interface StatCardProps {
+  label: string;
+  value: number;
+  color: "blue" | "green" | "yellow";
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
+  const colorMap = {
+    blue: "text-blue-600 bg-blue-50",
+    green: "text-green-600 bg-green-50",
+    yellow: "text-yellow-600 bg-yellow-50",
+  };
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+      <div className={`text-3xl font-bold ${colorMap[color]}`}>{value}</div>
+      <div className="text-sm text-gray-600 mt-2">{label}</div>
     </div>
   );
 };

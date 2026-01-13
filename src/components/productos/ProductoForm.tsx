@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react"; // Añadir useRef
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,6 +12,8 @@ import { IngredientesSelector } from "./IngredientesSelector";
 import { Alert } from "../common/Alert";
 
 import { useInsumos } from "../../hooks/useInsumos";
+import ImageService from "../../services/ImageService"; // Importar servicio de imágenes
+import { extractFilenameFromUrl } from "../../config/imageConfig"; // Importar utilidad
 import type { ArticuloManufacturadoRequestDTO } from "../../types/productos/ArticuloManufacturadoRequestDTO";
 import type { ArticuloManufacturadoResponseDTO } from "../../types/productos/ArticuloManufacturadoResponseDTO";
 import type { CategoriaResponseDTO } from "../../types/categorias/CategoriaResponseDTO";
@@ -68,12 +70,16 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
   const isCreating = !producto;
   const { insumos, loading: loadingInsumos } = useInsumos();
 
+  // ✅ Referencia para rastrear imágenes subidas en esta sesión.
+  const newlyUploadedUrls = useRef<string[]>([]);
+
   const {
     control,
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    // ✅ CORRECCIÓN: Desestructurar 'dirtyFields' desde formState
+    formState: { errors, dirtyFields },
     setError, // ✅ para marcar el campo con error de servidor
   } = useForm<ArticuloManufacturadoRequestDTO>({
     resolver: zodResolver(schema),
@@ -152,12 +158,64 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
   // ==================== MANEJADORES ====================
 
   const handleFormSubmit = (data: ArticuloManufacturadoRequestDTO) => {
-    const payload = { ...data };
-    // Si el precio de venta no fue tocado, usar el sugerido
-    if (!payload.precioVenta || payload.precioVenta <= 0) {
-      payload.precioVenta = precioSugerido;
+    // Si el formulario se envía, las imágenes se van a usar. Limpiamos el tracker.
+    newlyUploadedUrls.current = [];
+
+    const filteredDetalles =
+      data.detalles?.filter(
+        (detalle) => detalle.idArticuloInsumo && detalle.cantidad > 0
+      ) || [];
+
+    const payload = {
+      ...data,
+      detalles: filteredDetalles, // ✅ CORRECCIÓN: El backend espera 'detalles', no 'detallesManufacturados'
+    };
+
+    // ✅ CORRECCIÓN: Usar 'dirtyFields.precioVenta' para verificar si el campo fue modificado
+    if (!dirtyFields.precioVenta) {
+      payload.precioVenta = parseFloat(precioSugerido.toFixed(2));
     }
+
+    // ✅ LOGGING: Añadido para depurar el payload final que se envía
+    console.log("📦 Payload final enviado al backend:", payload);
+
     onSubmit(payload);
+  };
+
+  /**
+   * Limpia los archivos físicos que se subieron pero no se utilizaron
+   * porque el usuario canceló la operación.
+   */
+  const cleanupUnusedImages = () => {
+    if (newlyUploadedUrls.current.length > 0) {
+      newlyUploadedUrls.current.forEach(async (url) => {
+        const filename = extractFilenameFromUrl(url);
+        if (filename) {
+          try {
+            await ImageService.deletePhysicalFile(filename);
+          } catch (error) {
+            console.error(
+              `Error al limpiar el archivo huérfano ${filename}:`,
+              error
+            );
+          }
+        }
+      });
+      newlyUploadedUrls.current = [];
+    }
+  };
+
+  const handleCancelClick = () => {
+    cleanupUnusedImages();
+    onCancel();
+  };
+
+  /**
+   * Callback que se ejecuta cuando ImageUpload sube un nuevo archivo.
+   * Registra la URL para una posible limpieza posterior.
+   */
+  const handleNewImageUploaded = (url: string) => {
+    newlyUploadedUrls.current.push(url);
   };
 
   // ==================== RENDER ====================
@@ -167,13 +225,6 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
       {/* ✅ Notificación clara del backend */}
       {serverErrorMessage && (
         <Alert type="error" message={serverErrorMessage} />
-      )}
-
-      {isCreating && (
-        <Alert
-          type="info"
-          message="Las imágenes se pueden agregar después de crear el producto."
-        />
       )}
 
       {/* SECCIÓN 1: INFORMACIÓN GENERAL */}
@@ -395,33 +446,33 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({
       </div>
 
       {/* SECCIÓN 5: FOTOS DEL PRODUCTO */}
-      {!isCreating && (
-        <div className="p-6 border rounded-lg bg-white shadow-sm">
-          <h2 className="text-xl font-semibold mb-6 text-gray-800">
-            5. Fotos del Producto
-          </h2>
-          <Controller
-            name="imagenes"
-            control={control}
-            render={({ field }) => (
-              <ImageUpload
-                entityType="MANUFACTURADO"
-                entityId={producto?.idArticulo}
-                currentImages={field.value}
-                onImagesChange={field.onChange}
-                multiple
-              />
-            )}
-          />
-        </div>
-      )}
+      <div className="p-6 border rounded-lg bg-white shadow-sm">
+        <h2 className="text-xl font-semibold mb-6 text-gray-800">
+          5. Fotos del Producto
+        </h2>
+        <Controller
+          name="imagenes"
+          control={control}
+          render={({ field }) => (
+            <ImageUpload
+              entityType="MANUFACTURADO"
+              currentImages={field.value || []}
+              onImagesChange={field.onChange}
+              // ✅ Pasar los nuevos manejadores para la limpieza
+              onNewImageUploaded={handleNewImageUploaded}
+              multiple
+            />
+          )}
+        />
+      </div>
 
       {/* BOTONES DE ACCIÓN */}
       <div className="flex justify-end space-x-4 pt-6 border-t">
         <Button
           type="button"
           variant="outline"
-          onClick={onCancel}
+          // ✅ Usar el nuevo manejador de cancelación
+          onClick={handleCancelClick}
           disabled={loading}
         >
           Cancelar

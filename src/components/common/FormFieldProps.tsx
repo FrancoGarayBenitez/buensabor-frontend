@@ -3,19 +3,28 @@ import React from "react";
 interface FormFieldProps {
   label: string;
   name: string;
-  type?: "text" | "number" | "email" | "password" | "textarea";
+  type?:
+    | "text"
+    | "number"
+    | "email"
+    | "password"
+    | "textarea"
+    | "date"
+    | "time";
   value?: string | number;
   onChange?: (value: string | number) => void;
+  onBlur?: () => void; // ✅ AÑADIR PROP onBlur
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
   error?: string;
   helperText?: string;
-  rows?: number; // Para textarea
-  min?: number; // Para number
-  max?: number; // Para number
-  step?: number; // Para number
+  rows?: number;
+  min?: number;
+  max?: number;
+  step?: number;
   className?: string;
+  hideLabel?: boolean;
 }
 
 export const FormField: React.FC<FormFieldProps> = ({
@@ -24,6 +33,7 @@ export const FormField: React.FC<FormFieldProps> = ({
   type = "text",
   value,
   onChange,
+  onBlur, // ✅ DESESTRUCTURAR onBlur
   placeholder,
   required = false,
   disabled = false,
@@ -34,13 +44,18 @@ export const FormField: React.FC<FormFieldProps> = ({
   max,
   step,
   className = "",
+  hideLabel = false,
 }) => {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const inputValue = e.target.value;
-    // Enviar siempre el string crudo (incluye "" cuando el usuario borra)
     onChange?.(inputValue);
+  };
+
+  // ✅ AÑADIR MANEJADOR DE onBlur
+  const handleBlur = () => {
+    onBlur?.();
   };
 
   const inputClasses = `
@@ -64,14 +79,17 @@ export const FormField: React.FC<FormFieldProps> = ({
 
   return (
     <div className={`space-y-1 ${className}`}>
-      <label
-        htmlFor={name}
-        className="block text-sm font-medium"
-        style={{ color: "#443639" }}
-      >
-        {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </label>
+      {/* ✅ RENDERIZAR LA ETIQUETA CONDICIONALMENTE */}
+      {!hideLabel && (
+        <label
+          htmlFor={name}
+          className="block text-sm font-medium"
+          style={{ color: "#443639" }}
+        >
+          {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
 
       {type === "textarea" ? (
         <textarea
@@ -79,6 +97,7 @@ export const FormField: React.FC<FormFieldProps> = ({
           name={name}
           value={String(normalizedValue)}
           onChange={handleChange}
+          onBlur={handleBlur} // ✅ AÑADIR onBlur
           placeholder={placeholder}
           required={required}
           disabled={disabled}
@@ -91,10 +110,6 @@ export const FormField: React.FC<FormFieldProps> = ({
               e.target.style.boxShadow = "0 0 0 2px rgba(205, 108, 80, 0.2)";
             }
           }}
-          onBlur={(e) => {
-            e.target.style.borderColor = error ? "#ef4444" : "#E29C44";
-            e.target.style.boxShadow = "none";
-          }}
         />
       ) : (
         <input
@@ -103,6 +118,7 @@ export const FormField: React.FC<FormFieldProps> = ({
           type={type}
           value={String(normalizedValue)}
           onChange={handleChange}
+          onBlur={handleBlur} // ✅ AÑADIR onBlur
           placeholder={placeholder}
           required={required}
           disabled={disabled}
@@ -116,10 +132,6 @@ export const FormField: React.FC<FormFieldProps> = ({
               e.target.style.borderColor = "#CD6C50";
               e.target.style.boxShadow = "0 0 0 2px rgba(205, 108, 80, 0.2)";
             }
-          }}
-          onBlur={(e) => {
-            e.target.style.borderColor = error ? "#ef4444" : "#E29C44";
-            e.target.style.boxShadow = "none";
           }}
         />
       )}

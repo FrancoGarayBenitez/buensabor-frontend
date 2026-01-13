@@ -293,3 +293,5 @@ export class FacturaService {
     return completamentePagada ? "Pagado" : "Pendiente";
   }
 }
+
+export const facturaService = new FacturaService();

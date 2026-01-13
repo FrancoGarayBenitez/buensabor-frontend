@@ -191,3 +191,5 @@ export class CategoriaService {
       : new Error("Error en el servicio de categorías");
   }
 }
+
+export const categoriaService = new CategoriaService();

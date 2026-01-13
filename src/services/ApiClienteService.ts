@@ -12,65 +12,42 @@ export class ApiClienteService {
   }
 
   /**
-   * Obtiene headers con token siempre actualizado
+   * Obtiene los headers de autenticación, añadiendo el token si está disponible.
    */
   private async getAuthHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    // SIEMPRE obtener token fresco desde localStorage (no usar cache)
     const token = AuthPasswordService.getToken();
-
     if (token) {
       headers.Authorization = `Bearer ${token}`;
-      console.log("🔐 Token agregado a headers:", token);
-    } else {
-      console.log("⚠️ No hay token disponible para la petición");
     }
 
     return headers;
   }
 
-  private async request<T>(url: string, options?: RequestInit): Promise<T> {
-    console.log(`📡 ${options?.method || "GET"} ${this.baseUrl}${url}`);
-
-    const authHeaders = await this.getAuthHeaders();
-
-    const response = await fetch(`${this.baseUrl}${url}`, {
-      headers: {
-        ...authHeaders,
-        ...options?.headers,
-      },
-      ...options,
-    });
-
-    console.log(`📨 Respuesta: ${response.status} ${response.statusText}`);
-
+  /**
+   * Maneja la respuesta de una solicitud HTTP, lanzando errores si es necesario.
+   */
+  private async handleResponse<T>(response: Response, url: string): Promise<T> {
     if (!response.ok) {
-      if (response.status === 401) {
-        console.log("🚫 Error 401 - Token inválido o expirado");
-      }
-
-      const errorBody = await response.text();
       let errorMessage = `Error ${response.status}: ${response.statusText}`;
-
       try {
-        const errorJson = JSON.parse(errorBody);
+        const errorBody = await response.json();
         errorMessage =
-          errorJson.error ||
-          errorJson.message ||
-          errorJson.mensaje ||
+          errorBody.error ||
+          errorBody.message ||
+          errorBody.mensaje ||
           errorMessage;
-      } catch (parseError) {
-        errorMessage = errorBody || errorMessage;
+      } catch (e) {
+        errorMessage = (await response.text()) || errorMessage;
       }
-
-      console.error(`❌ Error completo:`, errorMessage);
+      console.error(`Error en la petición a ${url}:`, errorMessage);
       throw new Error(errorMessage);
     }
 
-    // Si no hay contenido (ej: DELETE), retornar objeto vacío
+    // Si la respuesta no tiene contenido (ej: 204 No Content), se devuelve un objeto vacío.
     if (
       response.status === 204 ||
       response.headers.get("content-length") === "0"
@@ -79,6 +56,24 @@ export class ApiClienteService {
     }
 
     return response.json();
+  }
+
+  /**
+   * Método central para realizar todas las peticiones fetch.
+   * Maneja la autenticación, el parseo de errores y la respuesta.
+   */
+  private async request<T>(url: string, options?: RequestInit): Promise<T> {
+    const authHeaders = await this.getAuthHeaders();
+
+    const response = await fetch(`${this.baseUrl}${url}`, {
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...options?.headers,
+      },
+    });
+
+    return this.handleResponse<T>(response, url);
   }
 
   public async get<T = any>(url: string): Promise<T> {
@@ -106,8 +101,55 @@ export class ApiClienteService {
     });
   }
 
-  public async deleteRequest<T = any>(url: string): Promise<T> {
-    return this.request<T>(url, { method: "DELETE" });
+  /**
+   * Realiza una petición DELETE, permitiendo un cuerpo de datos opcional.
+   */
+  public async deleteRequest<T = any>(url: string, data?: any): Promise<T> {
+    return this.request<T>(url, {
+      method: "DELETE",
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  /**
+   * Método genérico para enviar FormData con soporte para POST y PUT.
+   * Esto evita que el método genérico 'request' inyecte un 'Content-Type' incorrecto.
+   */
+  private async sendFormData<T = any>(
+    url: string,
+    formData: FormData,
+    method: "POST" | "PUT"
+  ): Promise<T> {
+    // Se obtienen los headers de autenticación, pero se omite el Content-Type.
+    const { ["Content-Type"]: _, ...authHeaders } = await this.getAuthHeaders();
+
+    const response = await fetch(`${this.baseUrl}${url}`, {
+      method,
+      headers: authHeaders, // Solo se usan los headers de autenticación.
+      body: formData,
+    });
+
+    return this.handleResponse<T>(response, url);
+  }
+
+  /**
+   * Envía datos en formato FormData usando el método POST.
+   */
+  public async postFormData<T = any>(
+    url: string,
+    formData: FormData
+  ): Promise<T> {
+    return this.sendFormData<T>(url, formData, "POST");
+  }
+
+  /**
+   * Envía datos en formato FormData usando el método PUT.
+   */
+  public async putFormData<T = any>(
+    url: string,
+    formData: FormData
+  ): Promise<T> {
+    return this.sendFormData<T>(url, formData, "PUT");
   }
 }
 

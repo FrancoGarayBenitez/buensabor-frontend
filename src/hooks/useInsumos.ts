@@ -26,15 +26,24 @@ export const useInsumos = () => {
     }
   }, []);
 
-  // ==================== CRUD (CON OPTIMIZACIÓN DE UI) ====================
+  // ==================== CRUD MEJORADO ====================
 
-  const createInsumo = async (data: ArticuloInsumoRequestDTO) => {
+  const createInsumo = async (
+    data: ArticuloInsumoRequestDTO
+  ): Promise<ArticuloInsumoResponseDTO> => {
     setLoading(true);
     try {
+      console.log("🆕 Creando insumo:", data);
       const nuevoInsumo = await insumoService.create(data);
+
+      // ✅ CORRECCIÓN: Actualizar estado inmediatamente
       setInsumos((prev) => [...prev, nuevoInsumo]);
       setError(null);
+
+      console.log("✅ Insumo creado y agregado al estado:", nuevoInsumo);
+      return nuevoInsumo;
     } catch (err) {
+      console.error("❌ Error al crear insumo:", err);
       const message =
         err instanceof Error ? err.message : "Error al crear insumo";
       setError(message);
@@ -44,15 +53,25 @@ export const useInsumos = () => {
     }
   };
 
-  const updateInsumo = async (id: number, data: ArticuloInsumoRequestDTO) => {
+  const updateInsumo = async (
+    id: number,
+    data: ArticuloInsumoRequestDTO
+  ): Promise<ArticuloInsumoResponseDTO> => {
     setLoading(true);
     try {
+      console.log("✏️ Actualizando insumo:", id, data);
       const insumoActualizado = await insumoService.update(id, data);
+
+      // ✅ CORRECCIÓN: Actualizar estado inmediatamente
       setInsumos((prev) =>
         prev.map((i) => (i.idArticulo === id ? insumoActualizado : i))
       );
       setError(null);
+
+      console.log("✅ Insumo actualizado en el estado:", insumoActualizado);
+      return insumoActualizado;
     } catch (err) {
+      console.error("❌ Error al actualizar insumo:", err);
       const message =
         err instanceof Error ? err.message : "Error al actualizar insumo";
       setError(message);
@@ -62,15 +81,19 @@ export const useInsumos = () => {
     }
   };
 
-  const deleteInsumo = async (id: number) => {
+  const deleteInsumo = async (id: number): Promise<void> => {
     setLoading(true);
     try {
+      console.log("🗑️ Eliminando insumo:", id);
       await insumoService.delete(id);
-      setInsumos((prev) =>
-        prev.map((i) => (i.idArticulo === id ? { ...i, eliminado: true } : i))
-      );
+
+      // ✅ CORRECCIÓN: Actualizar estado inmediatamente
+      setInsumos((prev) => prev.filter((i) => i.idArticulo !== id));
       setError(null);
+
+      console.log("✅ Insumo eliminado del estado");
     } catch (err) {
+      console.error("❌ Error al eliminar insumo:", err);
       const message =
         err instanceof Error ? err.message : "Error al eliminar insumo";
       setError(message);
@@ -193,7 +216,7 @@ export const useInsumos = () => {
     loading,
     error,
 
-    // CRUD
+    // ✅ CRUD que devuelve promesas con los datos
     createInsumo,
     updateInsumo,
     deleteInsumo,
